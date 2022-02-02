@@ -1,12 +1,8 @@
 import pandas as pd
 import numpy as np
-
-import json
-from collections import defaultdict
 import datetime
 import tqdm
 import re
-
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import AxesGrid
 
@@ -36,23 +32,36 @@ a = a.rename(columns={"FINREGISTRYID_x": "ch_id", "date_of_birth_x": "ch_birth",
 end = datetime.datetime.now()
 print(end - start)
 
-def get_coverage_img(df, who):
+start = datetime.datetime.now()
+b = df_info[['FINREGISTRYID']].merge(df_events[['FINNGENID','AGE']],'left',left_on='FINREGISTRYID',right_on='FINNGENID')
+b = b.sort_values('AGE')
+b['dup'] = b.duplicated(subset='FINREGISTRYID')
+age_df = b[b.dup == False]
+end = datetime.datetime.now()
+print(end - start)
+
+
+def get_coverage_img(df, who, base_year_start=1910, base_year_end=2010, base_who='ch'):
     '''
     df - pd.DataFrame
     who - string: 'ch', 'mo', 'fa'
     '''
 
     coverage, count = [], []
-    for num in tqdm.tqdm(range(1910,2010)):
-        numerator = len(df[(df[who+'_age_start'].isnull() == False)&(df.ch_year == num)])
-        denominator = len(df[df.ch_year == num])
-        percent = numerator/denominator
-        coverage.append(percent)
-        count.append(numerator)
+    for num in tqdm.tqdm(range(base_year_start,base_year_end)):
+        denominator = len(df[df[base_who+'_year'] == num])
+        if denominator == 0:
+            coverage.append(0.0)
+            count.append(0.1)
+        else:
+            numerator = len(df[(df[who+'_age_start'].isnull() == False)&(df[base_who+'_year'] == num)])
+            percent = numerator/denominator
+            coverage.append(percent)
+            count.append(numerator)
 
     fig, ax = plt.subplots(figsize=(20,8))
     ax.grid()
-    scatter = ax.scatter(range(1910,2010), coverage, s=np.log10(count)*10)
+    scatter = ax.scatter(range(base_year_start,base_year_end), coverage, s=np.log10(count)*10)
     handles, labels = scatter.legend_elements(prop="sizes", alpha=0.7)
     
     # display the right numbers in the count legend
@@ -65,14 +74,14 @@ def get_coverage_img(df, who):
     ax.add_artist(legend)
 
     ax.set_ylabel('Registry coverage', size=14)
-    ax.set_xlabel('Birth year of child', size=14)
+    ax.set_xlabel('Birth year of '+who_dict[base_who], size=14)
     ax.set_title('Registry coverage by birth year - '+who_dict[who], size=20)
     ax.set_yticks(np.arange(0.0,1.0,0.2))
     plt.show()
 
-get_coverage_img(a, 'ch')
-get_coverage_img(a, 'mo')
-get_coverage_img(a, 'fa')
+get_coverage_img(a, 'ch', 1900, 1990, 'mo')
+get_coverage_img(a, 'mo', 1900, 1990, 'mo')
+get_coverage_img(a, 'fa', 1900, 1990, 'mo')
 
 
 df = a[(a.ch_year >= 1960)&(a.ch_year < 2010)][['ch_birth', 'mo_birth', 'fa_birth', 'ch_age',
@@ -149,18 +158,14 @@ a = a[['ch_id', 'ch_birth', 'ch_year', 'ch_age_start', 'ch_age_end', 'ch_age_del
        'mo_id', 'mo_birth', 'mo_year', 'mo_age_start', 'mo_age_end', 'mo_age_delta',
        'fa_id', 'fa_birth', 'fa_year', 'fa_age_start', 'fa_age_end', 'fa_age_delta']]
 
-a['ch_age_delta'] = a.ch_age_end - a.ch_age_start
-a['fa_age_delta'] = a.fa_age_end - a.fa_age_start
-a['mo_age_delta'] = a.mo_age_end - a.mo_age_start
 
-df = a[(a.ch_year <= 1910) & (a.ch_year > 2010)]
-
-#create matrix for heatmap
 def get_matrix(df, who):
-	'''
-	df - pd.DataFrame
-	who - string: 'ch', 'mo', 'fa'
-	'''
+    '''
+    Usage - create matrix for heatmap
+    df - pd.DataFrame
+    who - string: 'ch', 'mo', 'fa'
+    Output - pd.DataFrame: birth year of child by length of records
+    '''
 
     # select a subset we need from dataframe according to who
     sub_df = df[[who+'_year', who+'_age_delta']]
@@ -181,59 +186,55 @@ def get_matrix(df, who):
     
     return matrix
 
-ch_mat = get_matrix(df, 'ch')
-mo_mat = get_matrix(df, 'mo')
-fa_mat = get_matrix(df, 'fa')
 
-# create heatmaps for length of registry history by birth year
-vals = [mo_mat, ch_mat, ch_mat, fa_mat]
-titles = ['Mother', 'Child', 'Child', 'Father']
-
-fig = plt.figure(figsize=(17,17))
-
-grid = AxesGrid(fig, 111,
-                nrows_ncols=(2, 2),
-                axes_pad=0.3,
-                share_all=True,
-                label_mode="L",
-                cbar_location="right",
-                cbar_mode="single",
-                )
-
-for val, title, ax in zip(vals,titles,grid):
-    im = ax.imshow(val, extent=(1870.0, 2009.0, 97, -1))
-    ax.set_title(title)
-    ax.set_xlabel('Birth year')
-    ax.set_ylabel('Length of records')
-
-grid.cbar_axes[0].colorbar(im)
-
-for cax in grid.cbar_axes:
-    cax.toggle_label(True)
+def get_length_heatmap(ch_mat, mo_mat, fa_mat, cut_year=1870.0, cut_count=97):
+    '''
+    Usage - create heatmaps for length of registry history by birth year
+    ch_mat - pd.DataFrame: birth year of child by length of records
+    mo_mat - pd.DataFrame: birth year of mother by length of records
+    fa_mat - pd.DataFrame: birth year of father by length of records
+    cut_year - float: e.g. 1910.0
+    cut_count - int: e.g. 60
+    '''
     
-plt.show()
+    ch_mat = ch_mat.loc[-1:cut_count,cut_year:2009]
+    mo_mat = mo_mat.loc[-1:cut_count,cut_year:2009]
+    fa_mat = fa_mat.loc[-1:cut_count,cut_year:2009]
+
+    vals = [mo_mat, ch_mat, ch_mat, fa_mat]
+    titles = ['Mother', 'Child', 'Child', 'Father']
+
+    fig = plt.figure(figsize=(17,17))
+
+    grid = AxesGrid(fig, 111,
+                    nrows_ncols=(2, 2),
+                    axes_pad=0.3,
+                    share_all=True,
+                    label_mode="L",
+                    cbar_location="right",
+                    cbar_mode="single",
+                    )
+
+    for val, title, ax in zip(vals,titles,grid):
+        im = ax.imshow(val, extent=(cut_year, 2009.0, cut_count, -1))
+        ax.set_title(title)
+        ax.set_xlabel('Birth year')
+        ax.set_ylabel('Length of records')
+
+    grid.cbar_axes[0].colorbar(im)
+
+    for cax in grid.cbar_axes:
+        cax.toggle_label(True)
+
+    plt.show()
 
 
-def get_length_img(df, who):
-	'''
-	df - pd.DataFrame
-	who - string: 'ch', 'mo', 'fa'
-	'''
+df = a[(a.ch_year >= 1910) & (a.ch_year < 2009)]
+get_length_heatmap(
+    get_matrix(df, 'ch'), get_matrix(df, 'mo'), get_matrix(df, 'fa'))
 
-	# create a sub dataframe for heatmap
-	sub_df = df[[who+'_year', who+'_age_delta']]
-	sub_df = sub_df[(sub_df[who+'_year'] >= 1910) & (sub_df[who+'_year'] < 2010)]
-	sub_df[who+'_age_delta'] = sub_df[who+'_age_delta'].fillna(-0.5)
-	sub_df[who+'_age_delta_bins'] = pd.cut(x=sub_df[who+'_age_delta'], bins=range(-1,99), labels=range(-1,98)) # max length in df is 97.xx
-	matrix = pd.crosstab(sub_df[who+'_year'], sub_df[who+'_age_delta_bins'])
+df = a[(a.fa_year >= 1900) & (a.fa_year < 1989)]
+get_length_heatmap(
+    get_matrix(df, 'ch'), get_matrix(df, 'mo'), get_matrix(df, 'fa'),
+    cut_year=1900.0, cut_count=60)
 
-	# create a heatmap for length of registry history by birth year
-	plt.figure(figsize=(10,10))
-	extent = sub_df[who+'_year'].min(), sub_df[who+'_year'].max(), sub_df[who+'_age_delta_bins'].min(), sub_df[who+'_age_delta_bins'].max()
-	plt.imshow(matrix, extent=extent)
-	plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
-	plt.xlabel('Birth year of '+who_dict[who], size=14)
-	plt.ylabel('Length of registry coverage', size=14)
-	plt.title('Length of registry history by birth year - '+who_dict[who], size=20)
-	plt.colorbar(cax=plt.axes([0.85, 0.1, 0.02, 0.8]))
-	plt.show()
