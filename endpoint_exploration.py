@@ -1,11 +1,14 @@
 import pandas as pd
+import numpy as np
 import datetime
-
-from data_exploration import get_coverage_img, get_matrix, get_length_heatmap
-
+import tqdm
+import matplotlib.pyplot as plt
+from data_exploration import get_matrix, get_length_heatmap
 
 info_path = '/data/processed_data/minimal_phenotype/minimal_phenotype_file.csv'
 all_event_path = '/data/processed_data/endpointer/longitudinal_endpoints_2021_12_20_no_OMITS.txt'
+
+who_dict = {'ch':'child', 'mo':'mother', 'fa':'father'}
 
 # Get all events
 df_events = pd.read_csv(all_event_path)
@@ -18,12 +21,67 @@ test = df_events.ENDPOINT.value_counts()
 # 3181 in total. The last 4 have value fewer than 5, so take the first 3177
 ep_freq_df = pd.DataFrame({'ep':test.keys()[:3177].tolist(), 'freq':test.values[:3177]})
 
+plt.rcParams['axes.grid'] = True
+
+def get_prevalence_img(df, ep, base_year_start=1910, base_year_end=2010, base_who='ch'):
+    '''
+    df - pd.DataFrame
+    who - string: 'ch', 'mo', 'fa'
+    '''
+    years = range(base_year_start, base_year_end)
+
+    def get_data(df, who, base_year_start, base_year_end, base_who):
+        coverage = []
+        for num in years:  # tqdm.tqdm(range(base_year_start,base_year_end)):
+            denominator = len(df[df[base_who + '_year'] == num])
+            if denominator == 0:
+                coverage.append(0.0)
+            else:
+                numerator = len(df[(df[who + '_age_start'].isnull() == False) & (df[base_who + '_year'] == num)])
+                percent = numerator / denominator
+                coverage.append(percent)
+        return coverage
+
+    ch_coverage = get_data(df, 'ch', base_year_start, base_year_end, base_who)
+    mo_coverage = get_data(df, 'mo', base_year_start, base_year_end, base_who)
+    fa_coverage = get_data(df, 'fa', base_year_start, base_year_end, base_who)
+
+    fig, axs = plt.subplots(3, figsize=(16, 9), sharex=True)
+
+    axs[0].scatter(years, ch_coverage)
+    axs[0].set_ylabel('Prevalence', size=12)
+    axs[0].set_title('Prevalence of Children', size=16)
+    axs[0].set_yticks(np.arange(0.0, 0.41, 0.1))
+
+    axs[1].scatter(years, mo_coverage)
+    axs[1].set_ylabel('Prevalence', size=12)
+    axs[1].set_title('Prevalence of Mothers', size=16)
+    axs[1].set_yticks(np.arange(0.0, 0.41, 0.1))
+
+    axs[2].scatter(years, fa_coverage)
+    axs[2].set_ylabel('Prevalence', size=12)
+    axs[2].set_title('Prevalence of Fathers', size=16)
+    axs[2].set_yticks(np.arange(0.0, 0.41, 0.1))
+
+    plt.suptitle('Prevalence of ' + ep + ' by birth year', size=20)
+    plt.xlabel('Birth year of ' + who_dict[base_who], size=12)
+    plt.show()
+
 '''
 'F5_DEMENTIA' very late onset
 'I9_MI' late onset
 'T2D' medium onset
 'F5_SCHZPHR' early onset
 '''
+
+eps = ['E4_HYTHY_AI_STRICT',
+ 'T1D',
+ 'T1D_WIDE',
+ 'J10_ASTHMA',
+ 'L12_ATOPIC',
+ 'F5_DEPRESSIO',
+ 'F5_ALLANXIOUS']
+
 ep = 'F5_DEMENTIA'
 
 start = datetime.datetime.now()
@@ -65,17 +123,17 @@ df = df[['ch_id', 'ch_year', 'ch_age_start', 'ch_age_end', 'ch_age_delta',
          'mo_id', 'mo_year', 'mo_age_start', 'mo_age_end', 'mo_age_delta',
          'fa_id', 'fa_year', 'fa_age_start', 'fa_age_end', 'fa_age_delta']]
 
-get_coverage_img(df, 'ch', 1910, 2010, 'ch')
-get_coverage_img(df, 'mo', 1910, 2010, 'ch')
-get_coverage_img(df, 'fa', 1910, 2010, 'ch')
+get_coverage_img(df, 'ch', ep, 1910, 2010, 'ch')
+get_coverage_img(df, 'mo', ep, 1910, 2010, 'ch')
+get_coverage_img(df, 'fa', ep, 1910, 2010, 'ch')
 
-get_coverage_img(df, 'ch', 1880, 2000, 'mo')
-get_coverage_img(df, 'mo', 1880, 2000, 'mo')
-get_coverage_img(df, 'fa', 1880, 2000, 'mo')
+get_coverage_img(df, 'ch', ep, 1880, 2000, 'mo')
+get_coverage_img(df, 'mo', ep, 1880, 2000, 'mo')
+get_coverage_img(df, 'fa', ep, 1880, 2000, 'mo')
 
-get_coverage_img(df, 'ch', 1880, 2000, 'fa')
-get_coverage_img(df, 'mo', 1880, 2000, 'fa')
-get_coverage_img(df, 'fa', 1880, 2000, 'fa')
+get_coverage_img(df, 'ch', ep, 1880, 2000, 'fa')
+get_coverage_img(df, 'mo', ep, 1880, 2000, 'fa')
+get_coverage_img(df, 'fa', ep, 1880, 2000, 'fa')
 
 end = datetime.datetime.now()
 print(end - start)
