@@ -57,6 +57,8 @@ def get_prevalence_img(df, ep, base_year_start=1910, base_year_end=2010, base_wh
         axs[i].scatter(years, coverage)
         axs[i].set_ylabel('Prevalence', size=12)
         axs[i].set_title('Prevalence of ' + group, size=16)
+        axs[i].axvline(x=1960, color='r', linestyle='--')
+        axs[i].axvline(x=2000, color='r', linestyle='--')
         if (max_tick > 0.2) & (max_tick < 0.5):
             axs[i].set_yticks(np.arange(0.0, max_tick + 0.01, 0.1))
         elif max_tick >= 0.5:
