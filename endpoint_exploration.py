@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import datetime
-import tqdm
 import matplotlib.pyplot as plt
-from data_exploration import get_matrix, get_length_heatmap
+from mpl_toolkits.axes_grid1 import AxesGrid
+# from data_exploration import get_matrix, get_length_heatmap
 
 info_path = '/data/processed_data/minimal_phenotype/minimal_phenotype_file.csv'
 all_event_path = '/data/processed_data/endpointer/longitudinal_endpoints_2021_12_20_no_OMITS.txt'
@@ -134,5 +134,85 @@ get_prevalence_img(df, ep, 1910, 2010, 'ch')
 # get_prevalence_img(df, ep, 1880, 2000, 'mo')
 # get_prevalence_img(df, ep, 1880, 2000, 'fa')
 
+
+def get_matrix(df, who):
+    sub_df = df[[who + '_year', who + '_age_start']]
+    sub_df = sub_df[sub_df.isna() == False]  # remove rows without registry records
+    sub_df[who + '_age_delta'] = sub_df[who + '_age_start'].fillna(-0.5)
+
+    sub_df[who + '_age_delta_bins'] = pd.cut(x=sub_df[who + '_age_delta'], bins=range(-1, 100),
+                                             labels=range(-1, 99))  # max length in df is 97.xx -> 97
+    matrix = pd.crosstab(sub_df[who + '_age_delta_bins'], sub_df[who + '_year'])
+
+    # fill up missing rows and cols with 0
+    missing_rows = set(range(-1, 100)).difference(matrix.index)
+    missing_cols = set(np.arange(1880.0, 2010.0)).difference(matrix.columns)
+    t = pd.DataFrame(np.zeros([len(missing_rows), len(matrix.columns)]), index=missing_rows, columns=matrix.columns)
+    matrix = pd.concat([matrix, t], axis=0)
+    matrix = pd.concat(
+        [matrix, pd.DataFrame(np.zeros([101, len(missing_cols)]), index=range(-1, 100), columns=missing_cols)], axis=1)
+    matrix = matrix.sort_index()  # sort rows
+    matrix = matrix.sort_index(axis=1)  # sort cols
+
+    return matrix
+
+
+def get_length_heatmap(ch_mat, mo_mat, fa_mat, cut_year=1880.0, cut_count=99):
+    '''
+    Usage - create heatmaps for length of registry history by birth year
+    ch_mat - pd.DataFrame: birth year of child by length of records
+    mo_mat - pd.DataFrame: birth year of mother by length of records
+    fa_mat - pd.DataFrame: birth year of father by length of records
+    cut_year - float: e.g. 1910.0
+    cut_count - int: e.g. 60
+    '''
+
+    ch_mat = ch_mat.loc[-1:cut_count, cut_year:2009]
+    mo_mat = mo_mat.loc[-1:cut_count, cut_year:2009]
+    fa_mat = fa_mat.loc[-1:cut_count, cut_year:2009]
+
+    vals = [mo_mat, ch_mat, ch_mat, fa_mat]
+    titles = ['Mother', 'Child', 'Child', 'Father']
+
+    fig = plt.figure(figsize=(17, 17))
+
+    grid = AxesGrid(fig, 111,
+                    nrows_ncols=(2, 2),
+                    axes_pad=0.3,
+                    share_all=True,
+                    label_mode="L",
+                    cbar_location="right",
+                    cbar_mode="single",
+                    )
+
+    for val, title, ax in zip(vals, titles, grid):
+        im = ax.imshow(val, extent=(cut_year, 2009.0, cut_count, -1))
+        ax.set_title(title)
+        ax.set_xlabel('Birth year')
+        ax.set_ylabel('Age of the first diagnosis')
+
+    grid.cbar_axes[0].colorbar(im)
+
+    for cax in grid.cbar_axes:
+        cax.toggle_label(True)
+
+    plt.show()
+
+
+ch_mat = get_matrix(df[(df.ch_year >= 1910) & (df.ch_year < 2009)], 'ch').iloc[1:,:]
+mo_mat = get_matrix(df[(df.ch_year >= 1910) & (df.ch_year < 2009)], 'mo').iloc[1:,:]
+fa_mat = get_matrix(df[(df.ch_year >= 1910) & (df.ch_year < 2009)], 'fa').iloc[1:,:]
+get_length_heatmap(ch_mat, mo_mat, fa_mat)
+
+
 test = df[(df.ch_year >= 1910) & (df.ch_year < 2009)].dropna(thresh=7)
 get_length_heatmap(get_matrix(test, 'ch'), get_matrix(test, 'mo'), get_matrix(test, 'fa'))
+
+# to check the incidence rate by age among all the population in Finland
+df_all = ch_mat.sum(axis=1)
+fig = plt.figure(figsize=(20,6))
+plt.plot(df_all.keys(), df_all.values, 'o-')
+plt.title('Incidence rates for type 1 diabetes by age at the first diagnosis',size=18)
+plt.xlabel('Age at the first diagnosis',size=12)
+plt.ylabel('Incidence rate',size=12)
+plt.show()
