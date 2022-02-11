@@ -9,6 +9,8 @@ from mpl_toolkits.axes_grid1 import AxesGrid
 first_event_path = '/data/processed_data/endpointer/wide_first_events_endpoints_2021-09-04_densified.txt'
 info_path = '/data/processed_data/minimal_phenotype/minimal_phenotype_file.csv'
 all_event_path = '/data/processed_data/endpointer/longitudinal_endpoints_2021_12_20_no_OMITS.txt'
+# everything: /data/processed_data/endpointer/supporting_files/main/remove_OMITs_wide.py # will take 6 hrs to load
+# for densifying: /data/processed_data/endpointer/supporting_files/main/densify_first_events.py
 
 who_dict = {'ch':'child', 'mo':'mother', 'fa':'father'}
 
@@ -40,6 +42,23 @@ age_df = b[b.dup == False]
 end = datetime.datetime.now()
 print(end - start)
 
+a = a.merge(age_df[['FINREGISTRYID','AGE']], how='left', left_on='ch_id', right_on='FINREGISTRYID')
+a = a[['ch_id', 'ch_birth', 'mo_id', 'mo_birth', 'fa_id', 'fa_birth', 'AGE']]
+a = a.rename(columns={'AGE':'ch_age'})
+a = a.merge(age_df[['FINREGISTRYID','AGE']], how='left', left_on='mo_id', right_on='FINREGISTRYID')
+a = a[['ch_id', 'ch_birth', 'mo_id', 'mo_birth', 'fa_id', 'fa_birth', 'ch_age', 'AGE']]
+a = a.rename(columns={'AGE':'mo_age'})
+a = a.merge(age_df[['FINREGISTRYID','AGE']], how='left', left_on='fa_id', right_on='FINREGISTRYID')
+a = a[['ch_id', 'ch_birth', 'mo_id', 'mo_birth', 'fa_id', 'fa_birth', 'ch_age', 'mo_age', 'AGE']]
+a = a.rename(columns={'AGE':'fa_age'})
+
+a['ch_year'] = a['ch_birth'].str.split('-').str[0].astype(float)
+a['mo_year'] = a['mo_birth'].str.split('-').str[0].astype(float)
+a['fa_year'] = a['fa_birth'].str.split('-').str[0].astype(float)
+
+# a.to_csv('parent_child.csv')
+a = pd.read_csv('parent_child.csv')
+# len(a) = 7070745
 
 def get_coverage_img(df, who, base_year_start=1910, base_year_end=2010, base_who='ch'):
     '''
@@ -238,3 +257,21 @@ get_length_heatmap(
     get_matrix(df, 'ch'), get_matrix(df, 'mo'), get_matrix(df, 'fa'),
     cut_year=1900.0, cut_count=60)
 
+# get the population by year
+birth = df_info.date_of_birth.str.split('-').str[0].astype(float)
+death = df_info.death_date.str.split('-').str[0].astype(float)
+death = death.fillna(2020.0)
+df_all = pd.DataFrame({'birth':birth, 'death':death})
+
+for i in np.arange(1960.0, 2020.0):
+    birth = pd.cut(x=df_all.birth, bins=[1800.0,i+1.0,2021.0], labels=[1,0]).astype(int)
+    death = pd.cut(x=df_all.death, bins=[1800.0,i,2021.0], labels=[0,1]).astype(int)
+    df_all[i] = birth * death
+
+pop = df_all.iloc[:,2:].sum(axis=0)
+plt.figure(figsize=(20,5))
+plt.plot(pop.keys(), pop.values, 'o-')
+plt.ylabel('Population', size=12)
+plt.xlabel('Year', size=12)
+plt.title('Population over the years from 1960 to 2019', size=18)
+plt.show()

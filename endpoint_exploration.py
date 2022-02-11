@@ -212,7 +212,61 @@ get_length_heatmap(get_matrix(test, 'ch'), get_matrix(test, 'mo'), get_matrix(te
 df_all = ch_mat.sum(axis=1)
 fig = plt.figure(figsize=(20,6))
 plt.plot(df_all.keys(), df_all.values, 'o-')
-plt.title('Incidence rates for type 1 diabetes by age at the first diagnosis',size=18)
+plt.title('Incidence for type 1 diabetes by age at the first diagnosis',size=18)
 plt.xlabel('Age at the first diagnosis',size=12)
-plt.ylabel('Incidence rate',size=12)
+plt.ylabel('Incidence',size=12)
+plt.show()
+
+# get all individuals in db for one heatmap
+ch_mat = get_matrix(df[(df.ch_year >= 1910)], 'ch').iloc[1:,:]
+plt.figure(figsize=(10,7))
+plt.imshow(ch_mat, extent=(1920.0,2019.0,100,0))
+plt.colorbar()
+plt.xlabel('Birth year')
+plt.ylabel('Age at the first diagnosis')
+plt.suptitle('Heatmap for all individuals by birth year and age of the first diagnosis', size=15)
+plt.show()
+
+
+# get prevalence by groups 20, 40, 100
+df['ch_age_bins'] = pd.cut(x=df['ch_age_start'], bins=[-1,20,40,100], labels=[20,40,100])
+df['ch_year_start'] = np.floor(df.ch_year + df.ch_age_start)
+
+df_test = df[['ch_id','ch_age_bins','ch_year_start']]#.dropna()
+df_test = pd.DataFrame(df_test.groupby(['ch_age_bins', 'ch_year_start']).count().to_records())
+df_test = df_test[df_test.ch_year_start >= 1960]
+
+pop = pop.to_frame().reset_index()
+pop = pop.rename(columns={'index':'year',0:'count'})
+df_test = df_test.merge(pop, 'left', left_on='ch_year_start', right_on='year')
+df_test['prevalence'] = df_test.ch_id/df_test['count']
+
+plt.figure(figsize=(20,5))
+plt.plot(df_test[df_test.ch_age_bins == 20].ch_year_start, df_test[df_test.ch_age_bins == 20].prevalence, 'o-', c='orange', label='0-19')
+plt.plot(df_test[df_test.ch_age_bins == 40].ch_year_start, df_test[df_test.ch_age_bins == 40].prevalence, 'o-', c='green', label='20-39')
+plt.plot(df_test[df_test.ch_age_bins == 100].ch_year_start, df_test[df_test.ch_age_bins == 100].prevalence, 'o-', c='purple', label='40-99')
+plt.ylabel('Prevalence', size=12)
+plt.xlabel('Year', size=12)
+plt.title('Prevalence over the years from 1960 to 2019', size=18)
+plt.legend(loc='upper left')
+plt.show()
+
+# get incidence
+plt.figure(figsize=(20,5))
+plt.plot(df_test[df_test.ch_age_bins == 20].ch_year_start, df_test[df_test.ch_age_bins == 20].ch_id, 'o-', c='orange')
+plt.plot(df_test[df_test.ch_age_bins == 40].ch_year_start, df_test[df_test.ch_age_bins == 40].ch_id, 'o-', c='green')
+plt.plot(df_test[df_test.ch_age_bins == 100].ch_year_start, df_test[df_test.ch_age_bins == 100].ch_id, 'o-', c='purple')
+plt.ylabel('Incidence', size=12)
+plt.xlabel('Year', size=12)
+plt.title('Incidence over the years from 1960 to 2019', size=18)
+plt.show()
+
+# get overall prevalence
+df_test1 = pd.DataFrame(df_test[['ch_year_start','ch_id','count']].groupby(['ch_year_start','count']).sum().to_records())
+df_test1['prevalence'] = df_test1.ch_id/df_test1['count']
+plt.figure(figsize=(20,5))
+plt.plot(df_test1.ch_year_start, df_test1.prevalence, 'o-')
+plt.ylabel('Prevalence', size=12)
+plt.xlabel('Year', size=12)
+plt.title('Prevalence of T1D over the years from 1960 to 2019', size=18)
 plt.show()
