@@ -269,9 +269,13 @@ for i in np.arange(1960.0, 2020.0):
     df_all[i] = birth * death
 
 pop = df_all.iloc[:,2:].sum(axis=0)
+pop = pop.to_frame().reset_index()
+pop = pop.rename(columns={'index':'year',0:'counts'})
+
 plt.figure(figsize=(20,5))
-plt.plot(pop.keys(), pop.values, 'o-')
+plt.plot(pop.year, pop.counts, 'o-')
 plt.ylabel('Population', size=12)
 plt.xlabel('Year', size=12)
 plt.title('Population over the years from 1960 to 2019', size=18)
 plt.show()
+

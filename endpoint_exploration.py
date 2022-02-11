@@ -3,7 +3,7 @@ import numpy as np
 import datetime
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import AxesGrid
-# from data_exploration import get_matrix, get_length_heatmap
+from data_exploration import pop #get_matrix, get_length_heatmap
 
 info_path = '/data/processed_data/minimal_phenotype/minimal_phenotype_file.csv'
 all_event_path = '/data/processed_data/endpointer/longitudinal_endpoints_2021_12_20_no_OMITS.txt'
@@ -236,10 +236,8 @@ df_test = df[['ch_id','ch_age_bins','ch_year_start']]#.dropna()
 df_test = pd.DataFrame(df_test.groupby(['ch_age_bins', 'ch_year_start']).count().to_records())
 df_test = df_test[df_test.ch_year_start >= 1960]
 
-pop = pop.to_frame().reset_index()
-pop = pop.rename(columns={'index':'year',0:'count'})
 df_test = df_test.merge(pop, 'left', left_on='ch_year_start', right_on='year')
-df_test['prevalence'] = df_test.ch_id/df_test['count']
+df_test['prevalence'] = df_test.ch_id/df_test.counts
 
 plt.figure(figsize=(20,5))
 plt.plot(df_test[df_test.ch_age_bins == 20].ch_year_start, df_test[df_test.ch_age_bins == 20].prevalence, 'o-', c='orange', label='0-19')
@@ -263,7 +261,7 @@ plt.show()
 
 # get overall prevalence
 df_test1 = pd.DataFrame(df_test[['ch_year_start','ch_id','count']].groupby(['ch_year_start','count']).sum().to_records())
-df_test1['prevalence'] = df_test1.ch_id/df_test1['count']
+df_test1['prevalence'] = df_test1.ch_id/df_test1.counts
 plt.figure(figsize=(20,5))
 plt.plot(df_test1.ch_year_start, df_test1.prevalence, 'o-')
 plt.ylabel('Prevalence', size=12)
