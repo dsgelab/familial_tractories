@@ -196,6 +196,7 @@ def get_length_heatmap(ch_mat, mo_mat, fa_mat, cut_year=1880.0, cut_count=99):
     for cax in grid.cbar_axes:
         cax.toggle_label(True)
 
+    plt.suptitle('Heatmap of ' + ep + ' by birth year and age of the first diagnosis', size=15)
     plt.show()
 
 
@@ -212,7 +213,7 @@ get_length_heatmap(get_matrix(test, 'ch'), get_matrix(test, 'mo'), get_matrix(te
 df_all = ch_mat.sum(axis=1)
 fig = plt.figure(figsize=(20,6))
 plt.plot(df_all.keys(), df_all.values, 'o-')
-plt.title('Incidence for type 1 diabetes by age at the first diagnosis',size=18)
+plt.title('Incidence of '+ep+' by age at the first diagnosis',size=18)
 plt.xlabel('Age at the first diagnosis',size=12)
 plt.ylabel('Incidence',size=12)
 plt.show()
@@ -224,7 +225,7 @@ plt.imshow(ch_mat, extent=(1920.0,2019.0,100,0))
 plt.colorbar()
 plt.xlabel('Birth year')
 plt.ylabel('Age at the first diagnosis')
-plt.suptitle('Heatmap for all individuals by birth year and age of the first diagnosis', size=15)
+plt.suptitle('Heatmap of '+ep+' by birth year and age of the first diagnosis', size=15)
 plt.show()
 
 
@@ -245,8 +246,8 @@ plt.plot(df_test[df_test.ch_age_bins == 40].ch_year_start, df_test[df_test.ch_ag
 plt.plot(df_test[df_test.ch_age_bins == 100].ch_year_start, df_test[df_test.ch_age_bins == 100].prevalence, 'o-', c='purple', label='40-99')
 plt.ylabel('Prevalence', size=12)
 plt.xlabel('Year', size=12)
-plt.title('Prevalence over the years from 1960 to 2019', size=18)
-plt.legend(loc='upper left')
+plt.title('Prevalence of '+ep+' over the years from 1960 to 2019', size=18)
+plt.legend(loc='upper left', title='Age group')
 plt.show()
 
 # get incidence
@@ -256,7 +257,8 @@ plt.plot(df_test[df_test.ch_age_bins == 40].ch_year_start, df_test[df_test.ch_ag
 plt.plot(df_test[df_test.ch_age_bins == 100].ch_year_start, df_test[df_test.ch_age_bins == 100].ch_id, 'o-', c='purple')
 plt.ylabel('Incidence', size=12)
 plt.xlabel('Year', size=12)
-plt.title('Incidence over the years from 1960 to 2019', size=18)
+plt.title('Incidence of '+ep+' over the years from 1960 to 2019', size=18)
+plt.legend(loc='upper left', title='Age group')
 plt.show()
 
 # get overall prevalence
@@ -266,5 +268,5 @@ plt.figure(figsize=(20,5))
 plt.plot(df_test1.ch_year_start, df_test1.prevalence, 'o-')
 plt.ylabel('Prevalence', size=12)
 plt.xlabel('Year', size=12)
-plt.title('Prevalence of T1D over the years from 1960 to 2019', size=18)
+plt.title('Prevalence of '+ep+' over the years from 1960 to 2019', size=18)
 plt.show()
