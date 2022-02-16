@@ -7,7 +7,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, precision_score, recall_score, \
     precision_recall_curve, roc_curve
 from stat_tools import get_summary
-from plot_tools import plot_ci
+from plot_tools import plot_odds_ratio
 
 # select the endpoints you plan to look into
 eps = ['T1D_WIDE', 'E4_THYROIDITAUTOIM', 'K11_COELIAC', 'D3_ANAEMIA_B12_DEF', 'K11_CHRONGASTR', 'L12_VITILIGO']
@@ -102,4 +102,4 @@ Recall score: 0.6069052898321191
 
 # statistics
 summary_df = get_summary(lr, x_train, y_train, var_list)
-plot_ci(df, eps, demos)
+plot_odds_ratio(df, eps, demos)
