@@ -270,3 +270,4 @@ plt.ylabel('Prevalence', size=12)
 plt.xlabel('Year', size=12)
 plt.title('Prevalence of '+ep+' over the years from 1960 to 2019', size=18)
 plt.show()
+
