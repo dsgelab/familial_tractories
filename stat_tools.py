@@ -1,9 +1,16 @@
 import pandas as pd
 import numpy as np
 from scipy import stats
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 
-def get_summary(model, X, y, var_names):
+def get_summary(model, X, y):
+    """
+    :param model: a well-trained model instance
+    :param X: a DataFrame of inputs
+    :param y: a Series of output
+    :return: a DataFrame of key statistics
+    """
     coef = np.append(model.intercept_, model.coef_)
     X_matrix = np.append(np.ones((len(X),1)), X, axis=1)
     y_hat = model.predict(X)
@@ -23,5 +30,17 @@ def get_summary(model, X, y, var_names):
         'p_value': np.round(p_values_coef, 3),
         'ci_1': np.round(ci1_coef, 3),
         'ci_2': np.round(ci2_coef, 3),
-    }, index=['const'] + var_names)
+    }, index=['const'] + X.columns.tolist())
     return summary_df
+
+
+def vif(X):
+    """
+    :param X: a DataFrame of inputs
+    :return: a DataFrame of input names sorted by VIF
+    """
+    vif_info = pd.DataFrame({
+        'vif': [variance_inflation_factor(X.values, i) for i in range(X.shape[1])],
+        'col': X.columns
+    })
+    return vif_info.sort_values('vif', ascending=False)
