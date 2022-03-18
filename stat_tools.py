@@ -34,6 +34,9 @@ def get_summary(model, X, y):
     return summary_df
 
 
+# singular matrix
+# need to use lasso or ridge to remove collinearity
+# np.linalg.det(x_train)
 def vif(X):
     """
     :param X: a DataFrame of inputs

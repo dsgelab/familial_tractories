@@ -7,7 +7,6 @@ def plot_odds_ratio(table, demos, eps, ep_index, group_delta=.1, bar_delta=.1):
     # Create a color palette: https://www.w3schools.com/colors/colors_picker.asp
     palette = dict(zip(['Father', 'Mother', 'Child'], ['#35a6d4', '#ffa0aa', '#73b400']))
     plt.figure(figsize=(10, 6))
-    plt.grid()
     mo_df = table.loc[table.index.str.startswith('mo_'), ['ci_1', 'ci_2']]
     fa_df = table.loc[table.index.str.startswith('fa_'), ['ci_1', 'ci_2']]
     ch_df = table.loc[table.index.str.startswith('ch_'), ['ci_1', 'ci_2']]
@@ -37,7 +36,7 @@ def plot_odds_ratio(table, demos, eps, ep_index, group_delta=.1, bar_delta=.1):
         plt.plot([lower, lower], [i - bar_delta, i + bar_delta], color=palette['Child'])
         plt.plot([upper, upper], [i - bar_delta, i + bar_delta], color=palette['Child'])
     plt.yticks(range(len(eps + demos)), eps + demos)
-    plt.xlabel('Odds ratio for ' + eps[0] + ' diagnosis', size=14)
+    plt.xlabel('Odds ratio for ' + eps[ep_index] + ' diagnosis', size=14)
     plt.axvline(x=1.0, color='black', linestyle='--')
     # Create legend handles manually
     handles = [mpl.patches.Patch(color=palette[x], label=x) for x in palette.keys()]

@@ -271,3 +271,24 @@ plt.xlabel('Year', size=12)
 plt.title('Prevalence of '+ep+' over the years from 1960 to 2019', size=18)
 plt.show()
 
+
+eps = ['T1D', 'E4_THYROIDITAUTOIM', 'K11_COELIAC', 'D3_ANAEMIA_B12_DEF', 'M13_RHEUMA',
+       'L12_VITILIGO', 'GRAVES_OPHT', 'K11_CROHN']
+
+df = df.merge(df_info[['FINREGISTRYID', 'ch_year']].\
+              rename(columns={'FINREGISTRYID':'id_mother', 'ch_year':'mo_year'}), 'left')
+df = df.merge(df_info[['FINREGISTRYID', 'ch_year']].\
+              rename(columns={'FINREGISTRYID':'id_mother', 'ch_year':'mo_year'}), 'left')
+
+start = datetime.datetime.now()
+ep = eps[0]
+df_events_sub = df_events[df_events.ENDPOINT == ep]
+# add the start of the registry for each individual
+df_sub = df.merge(df_events_sub[['FINREGISTRYID', 'AGE']].rename(columns={'AGE':'ch_age_start'}), 'left')
+df_sub = df_sub.merge(df_events_sub[['FINREGISTRYID', 'AGE']].rename(columns={'FINREGISTRYID': 'id_mother', 'AGE': 'mo_age_start'}), 'left')
+df_sub = df_sub.merge(df_events_sub[['FINREGISTRYID', 'AGE']].rename(columns={'FINREGISTRYID': 'id_father', 'AGE': 'fa_age_start'}), 'left')
+df_sub = df_sub[['ch_id', 'ch_year', 'ch_age_start',
+         'mo_id', 'mo_year', 'mo_age_start',
+         'fa_id', 'fa_year', 'fa_age_start']]
+end = datetime.datetime.now()
+print(end - start)
