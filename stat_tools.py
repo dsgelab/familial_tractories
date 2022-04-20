@@ -47,3 +47,6 @@ def vif(X):
         'col': X.columns
     })
     return vif_info.sort_values('vif', ascending=False)
+
+def chi(X):
+    stat, p, dof, expected = stats.chi2_contingency(X)
