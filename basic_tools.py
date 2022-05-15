@@ -11,6 +11,7 @@ def load_data(event_path, info_path, pedigree_path):
     df_info = pd.read_csv(info_path)
     df_info['ch_year'] = df_info['date_of_birth'].str.split('-').str[0].astype(float)
     pedigree = pd.read_csv(pedigree_path)
+    # merge pedigree info into df_info
     logging.info('Data is loaded.')
     return df_events, df_info
 
