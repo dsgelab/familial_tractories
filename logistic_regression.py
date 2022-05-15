@@ -1,5 +1,6 @@
 # !conda activate jupyter_env
 # !cd familial_analysis
+# !python3
 import numpy as np
 import pandas as pd
 import tqdm, re
@@ -13,22 +14,26 @@ from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, pre
 
 first_event_path = '/data/processed_data/endpointer/densified_first_events_DF8_all_endpoints_2021-09-04.txt'
 info_path = '/data/processed_data/minimal_phenotype/minimal_phenotype_2022-03-28.csv'
-df_events, df_info = load_data(first_event_path, info_path)
+pedigree_path = ''
+df_events, df_info = load_data(first_event_path, info_path, pedigree_path)
 
 # select the endpoints you plan to look into
 # a list of ADs: https://risteys.finngen.fi/phenocode/AUTOIMMUNE
-eps = ['T1D_STRICT', 'M13_RHEUMA', 'E4_THYROIDITAUTOIM', 'G6_MS', 'M13_SLE', 'SLE_FG', 'M13_SJOGREN', 'M13_SYSTSLCE',
-       'M13_WEGENER', 'M13_MICROPOLYANG', 'M13_CHURGSTRAUSS', 'D3_ALLERGPURPURA', 'I9_RHEUFEV', 'E4_HYTHY_AI_STRICT',
-       'G6_ADEM', 'G6_DISSOTH', 'G6_NARCOCATA', 'AUTOIMMUNE_HYPERTHYROIDISM', 'M13_RELAPSPOLYCHONDR', 'K11_IBD',
-       'E4_AUTOPOLYFAI', 'AUTOHEP', 'D3_AIHA_DRUG', 'D3_AIHA_OTHER', 'G6_MYASTHENIA', 'G6_OTHDEMYEL', 'G6_MYOMUSCINOTH',
-       'K11_COELIAC', 'CHIRBIL_PRIM', 'G6_GUILBAR', 'L12_PSORIASIS', 'L12_VITILIGO', 'L12_ALOPECAREATA', 'M13_BEHCET',
-       'D3_ITP', 'N14_HENOCHSCHONLEIN_NEPHRITIS', 'E4_ADDISON', 'M13_HYPERANG', 'N14_IGA_NEPHROPATHY', 'M13_MCTD',
-       'D3_ANAEMIA_B12_DEF', 'H7_IRIDOCYC_ANTER', 'E4_GRAVES_OPHT_STRICT', 'L12_PEMPHIGOID', 'L12_DERMATHERP',
-       'M13_DERMATOPOLY']
+eps = ['T1D_STRICT', 'M13_RHEUMA', 'M13_RELAPSPOLYCHONDR', 'M13_SJOGREN', 'M13_SYSTSLCE', 'M13_DERMATOPOLY', # E4_DM1
+       'M13_WEGENER', 'M13_MICROPOLYANG', 'M13_CHURGSTRAUSS', 'D3_ALLERGPURPURA', 'M13_BEHCET', 'M13_MCTD',
+       'M13_HYPERANG', 'SLE_FG',  #'M13_SLE',
+       'I9_RHEUFEV', 'G6_MS', 'G6_ADEM', 'G6_DISSOTH', 'G6_NARCOCATA', 'AUTOIMMUNE_HYPERTHYROIDISM',
+       'E4_THYROIDITAUTOIM', 'E4_AUTOPOLYFAI', 'E4_HYTHY_AI_STRICT', 'E4_GRAVES_OPHT_STRICT', 'E4_ADDISON',
+       'AUTOHEP', 'D3_AIHA_DRUG', 'D3_AIHA_OTHER', 'D3_ITP', 'D3_ANAEMIA_B12_DEF', 'K11_COELIAC', 'K11_IBD',
+       'G6_MYASTHENIA', 'G6_OTHDEMYEL', 'G6_MYOMUSCINOTH', 'G6_GUILBAR', 'H7_IRIDOCYC_ANTER',  'CHIRBIL_PRIM',
+       'L12_PSORIASIS', 'L12_VITILIGO', 'L12_ALOPECAREATA', 'L12_PEMPHIGOID', 'L12_DERMATHERP',
+       'N14_HENOCHSCHONLEIN_NEPHRITIS', 'N14_IGA_NEPHROPATHY', 'T2D', 'GEST_DIABETES']
 
 eps = ['T1D_STRICT', 'E4_THYROIDITAUTOIM', 'K11_COELIAC', 'D3_ANAEMIA_B12_DEF', 'M13_RHEUMA',
        'L12_VITILIGO', 'GRAVES_OPHT', 'K11_CROHN']
-demos = ['sex']  # , 'ever_married', 'received_social_assistance', 'ISCED97']
+demos = ['sex']  # , 'ever_married', 'ISCED97', 'mother_tongue', 'post_code_first', 'number_of_children',
+# 'in_social_assistance_registries', 'in_vaccination_registry', 'in_infect_dis_registry', 'in_malformations_registry',
+#  'in_cancer_registry', 'ses', 'occupation', 'edulevel', 'edufield']
 
 df = df_info[['FINREGISTRYID', 'ch_year', 'id_mother', 'id_father'] + demos]
 df = df[(df.ch_year >= 1960.0) & (df.ch_year < 2000.0)]
@@ -42,33 +47,7 @@ if 'received_social_assistance' in demos:
 if 'ISCED97' in demos:
     df = df[~df.ISCED97.isna()]
 
-# METHOD 1
-# np.select faster & easier than df.merge faster than for loop
-for i in tqdm.tqdm(range(len(eps))):
-    df_events_sub = df_events[df_events.ENDPOINT == eps[i]]
-    if i == 0:
-        df['outcome'] = np.select([
-            (df['FINREGISTRYID'].isin(df_events_sub.FINNGENID)), (~df['FINREGISTRYID'].isin(df_events_sub.FINNGENID))
-        ], [1, 0])
-    df = df.merge(df_events_sub[['FINREGISTRYID', 'YEAR']], 'left')
-    df['ch_ep' + str(i)] = df.YEAR.fillna(2022.)
-    df = df.drop(columns=['FINREGISTRYID', 'YEAR'])
-    df = df.merge(df_events_sub[['FINREGISTRYID', 'YEAR']], 'left', left_on='id_mother', right_on='FINREGISTRYID')
-    df['mo_ep' + str(i)] = df.YEAR.fillna(2022.)
-    df = df.drop(columns=['FINREGISTRYID', 'YEAR'])
-    df = df.merge(df_events_sub[['FINREGISTRYID', 'YEAR']], 'left', left_on='id_father', right_on='FINREGISTRYID')
-    df['fa_ep' + str(i)] = df.YEAR.fillna(2022.)
-    df = df.drop(columns=['FINREGISTRYID', 'YEAR'])
 
-# ep_cols = ['mo_ep'+str(i) for i in range(len(eps))] +\
-#           ['fa_ep'+str(i) for i in range(len(eps))] +\
-#           ['ch_ep'+str(i) for i in range(1, len(eps))]
-ep_cols = [i for i in df.columns if re.match('\w{2}_ep\d', i) and i != 'ch_ep0']
-
-for ep in ep_cols:
-    df[ep] = np.select([(df[ep] < df.ch_ep0), (df[ep] >= df.ch_ep0)], [1, 0])
-
-# METHOD 2
 # np.select faster & easier than df.merge faster than for loop
 for i in tqdm.tqdm(range(len(eps))):
     df_events_sub = df_events[df_events.ENDPOINT == eps[i]]
