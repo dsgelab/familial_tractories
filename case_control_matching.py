@@ -1,6 +1,7 @@
 import pandas as pd
 import tqdm
 import itertools
+from plot_tools import draw_distribution
 
 # define matching ratio
 MATCH_NUM = 3
@@ -73,3 +74,7 @@ control = control_for_match[control_for_match.ID.isin(control_ids)]
 data = pd.concat([cases, control], axis=0, ignore_index=True)
 data = data.sample(frac=1)
 data.to_csv('data.csv', index=None)
+
+# reasonable matching
+draw_distribution(data, 'edulevel', 'ch_ep0', 'Case-control')
+draw_distribution(df, 'edulevel', 'ch_ep0', 'Study population')

@@ -12,7 +12,7 @@ geo_path = '/data/projects/project_akarvane/geo/living_province.csv'
 df_events, df_info, pedigree = load_data(first_event_path, info_path, geo_path, pedigree_path)
 
 # select variables that will be used to define study population
-df = df_info[['ID', 'sex', 'ch_year', 'number_of_children', 'emigrated', 'emigration_date',
+df = df_info[['ID', 'sex', 'ch_year', 'emigrated', 'emigration_date',
               'death_date', 'residence_type_last', 'residence_start_date_last', 'residence_end_date_last',
               'residence_type_first', 'residence_start_date_first', 'residence_end_date_first',
               'ever_married', 'mother_tongue', 'post_code_first', 'number_of_children', 'maakunta'
@@ -56,6 +56,9 @@ df = df[df.death_date.isna()]
 # min: 1975-05-06 max: 2019-12-31  ~34k
 df = df[(df.emigration_date.isna()) | (df.emigration_date.str.startswith('2020'))]
 # min: 2001-03-26 2010-01-03 max: 2020-05-19  ~35k
+
+# f???
+df['first_post'] = df.post_code_first.astype('str').str[:3]
 
 # define fathers' birth year range
 # plot the number of individuals by fathers' birth year

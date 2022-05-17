@@ -1,7 +1,25 @@
 import pandas as pd
 import numpy as np
 from scipy import stats
-from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+
+# function to calculate Cohen's d for independent samples
+def get_cohend(x1, x2):
+    """
+    :param x1: a DataFrame of inputs
+    :param x2: a Series of output
+    :return: a DataFrame of key statistics
+    """
+    # calculate the size of samples
+    n1, n2 = len(x1), len(x2)
+    # calculate the variance of the samples
+    s1, s2 = np.var(x1, ddof=1), np.var(x2, ddof=1)
+    # calculate the pooled standard deviation
+    s = np.sqrt(((n1 - 1) * s1 + (n2 - 1) * s2) / (n1 + n2 - 2))
+    # calculate the means of the samples
+    u1, u2 = np.mean(x1), np.mean(x2)
+    # calculate the effect size
+    return (u1 - u2) / s
 
 
 def get_summary(model, X, y):
@@ -32,21 +50,3 @@ def get_summary(model, X, y):
         'ci_2': np.round(ci2_coef, 3),
     }, index=['const'] + X.columns.tolist())
     return summary_df
-
-
-# singular matrix
-# need to use lasso or ridge to remove collinearity
-# np.linalg.det(x_train)
-def vif(X):
-    """
-    :param X: a DataFrame of inputs
-    :return: a DataFrame of input names sorted by VIF
-    """
-    vif_info = pd.DataFrame({
-        'vif': [variance_inflation_factor(X.values, i) for i in range(X.shape[1])],
-        'col': X.columns
-    })
-    return vif_info.sort_values('vif', ascending=False)
-
-def chi(X):
-    stat, p, dof, expected = stats.chi2_contingency(X)

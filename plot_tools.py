@@ -1,6 +1,39 @@
+import re
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import numpy as np
+from basic_tools import eps
+
+
+def get_ep_name(col_name):
+    if re.match('^\w{2}_ep\d+$',col_name):
+        ep = eps[int(re.findall('_ep(\d+)$',col_name)[0])]
+        if col_name.startswith('ch_'):
+            return 'children with '+ep
+        elif col_name.startswith('fa_'):
+            return 'father with '+ep
+        elif col_name.startswith('mo_'):
+            return 'mother with '+ep
+        else:
+            return col_name
+    else:
+        return col_name
+
+
+def draw_distribution(dataset, main_col, sub_col, title=''):
+    summary = pd.crosstab(dataset[main_col],dataset[sub_col])
+    summary = (100. * summary / summary.sum()).round(1)
+    summary.plot(kind='bar',figsize=(10,6))
+    full_title = 'Distribution of '+get_ep_name(main_col)+' by '+get_ep_name(sub_col)
+    plt.title(full_title, size=20)
+    plt.suptitle(title, size=16)
+    plt.xlabel(get_ep_name(main_col), size=14)
+    plt.ylabel('Percentage (%)', size=14)
+    plt.legend(dataset[sub_col].unique(), prop={'size':14}, title=get_ep_name(sub_col), title_fontsize=14)
+    plt.xticks(rotation=0, size=14)
+    plt.yticks(rotation=0, size=14)
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_odds_ratio(table, demos, eps, ep_index, ep_remove, group_delta=.1, bar_delta=.1):
