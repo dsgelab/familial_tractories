@@ -5,39 +5,20 @@ import numpy as np
 import pandas as pd
 import tqdm, re
 import statsmodels.api as sm
-from basic_tools import load_data
+from basic_tools import eps
 from plot_tools import plot_odds_ratio
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, precision_score, recall_score, \
     precision_recall_curve, roc_curve
 
-first_event_path = '/data/processed_data/endpointer/densified_first_events_DF8_all_endpoints_2021-09-04.txt'
-info_path = '/data/processed_data/minimal_phenotype/minimal_phenotype_2022-03-28.csv'
-pedigree_path = ''
-df_events, df_info = load_data(first_event_path, info_path, pedigree_path)
+data = pd.read_csv('data.csv')
 
-# select the endpoints you plan to look into
-# a list of ADs: https://risteys.finngen.fi/phenocode/AUTOIMMUNE
-eps = ['T1D_STRICT', 'M13_RHEUMA', 'M13_RELAPSPOLYCHONDR', 'M13_SJOGREN', 'M13_SYSTSLCE', 'M13_DERMATOPOLY', # E4_DM1
-       'M13_WEGENER', 'M13_MICROPOLYANG', 'M13_CHURGSTRAUSS', 'D3_ALLERGPURPURA', 'M13_BEHCET', 'M13_MCTD',
-       'M13_HYPERANG', 'SLE_FG',  #'M13_SLE',
-       'I9_RHEUFEV', 'G6_MS', 'G6_ADEM', 'G6_DISSOTH', 'G6_NARCOCATA', 'AUTOIMMUNE_HYPERTHYROIDISM',
-       'E4_THYROIDITAUTOIM', 'E4_AUTOPOLYFAI', 'E4_HYTHY_AI_STRICT', 'E4_GRAVES_OPHT_STRICT', 'E4_ADDISON',
-       'AUTOHEP', 'D3_AIHA_DRUG', 'D3_AIHA_OTHER', 'D3_ITP', 'D3_ANAEMIA_B12_DEF', 'K11_COELIAC', 'K11_IBD',
-       'G6_MYASTHENIA', 'G6_OTHDEMYEL', 'G6_MYOMUSCINOTH', 'G6_GUILBAR', 'H7_IRIDOCYC_ANTER',  'CHIRBIL_PRIM',
-       'L12_PSORIASIS', 'L12_VITILIGO', 'L12_ALOPECAREATA', 'L12_PEMPHIGOID', 'L12_DERMATHERP',
-       'N14_HENOCHSCHONLEIN_NEPHRITIS', 'N14_IGA_NEPHROPATHY', 'T2D', 'GEST_DIABETES']
-
-eps = ['T1D_STRICT', 'E4_THYROIDITAUTOIM', 'K11_COELIAC', 'D3_ANAEMIA_B12_DEF', 'M13_RHEUMA',
-       'L12_VITILIGO', 'GRAVES_OPHT', 'K11_CROHN']
-demos = ['sex']  # , 'ever_married', 'ISCED97', 'mother_tongue', 'post_code_first', 'number_of_children',
+demos = ['sex']  # , 'ever_married', 'mother_tongue', 'post_code_first', 'number_of_children',
 # 'in_social_assistance_registries', 'in_vaccination_registry', 'in_infect_dis_registry', 'in_malformations_registry',
 #  'in_cancer_registry', 'ses', 'occupation', 'edulevel', 'edufield']
 
-df = df_info[['FINREGISTRYID', 'ch_year', 'id_mother', 'id_father'] + demos]
-df = df[(df.ch_year >= 1960.0) & (df.ch_year < 2000.0)]
-df = df[(df.id_mother.isna() != True) & (df.id_father.isna() != True)]
+df = data[['ID', 'sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number'] + demos]
 
 if 'received_social_assistance' in demos:
     df['assisted'] = np.select([(~df.received_social_assistance.isna()), (df.received_social_assistance.isna())],
@@ -47,22 +28,6 @@ if 'received_social_assistance' in demos:
 if 'ISCED97' in demos:
     df = df[~df.ISCED97.isna()]
 
-
-# np.select faster & easier than df.merge faster than for loop
-for i in tqdm.tqdm(range(len(eps))):
-    df_events_sub = df_events[df_events.ENDPOINT == eps[i]]
-    df['mo_ep' + str(i)] = np.select([
-        (df['id_mother'].isin(df_events_sub.FINREGISTRYID)), (~df['id_mother'].isin(df_events_sub.FINREGISTRYID))
-    ], [1, 0])
-    df['fa_ep' + str(i)] = np.select([
-        (df['id_father'].isin(df_events_sub.FINREGISTRYID)), (~df['id_father'].isin(df_events_sub.FINREGISTRYID))
-    ], [1, 0])
-    df['ch_ep' + str(i)] = np.select([
-        (df['FINREGISTRYID'].isin(df_events_sub.FINREGISTRYID)),
-        (~df['FINREGISTRYID'].isin(df_events_sub.FINREGISTRYID))
-    ], [1, 0])
-
-df.to_csv('data_all_big.csv', index=None)
 
 
 x = df[[i for i in df.columns if re.match('ch_ep\d', i)]]
