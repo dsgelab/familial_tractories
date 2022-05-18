@@ -57,9 +57,6 @@ df = df[df.death_date.isna()]
 df = df[(df.emigration_date.isna()) | (df.emigration_date.str.startswith('2020'))]
 # min: 2001-03-26 2010-01-03 max: 2020-05-19  ~35k
 
-# f???
-df['first_post'] = df.post_code_first.astype('str').str[:3]
-
 # define fathers' birth year range
 # plot the number of individuals by fathers' birth year
 df.fa_year.value_counts().sort_index().plot(kind='bar', figsize=(15, 6))
@@ -120,26 +117,39 @@ df['ch_year_range'] = np.select([
     ((df['ch_year'] >= 1995) & (df['ch_year'] <= 1999)), # 95-99
     ], ['1960', '1965', '1970', '1975', '1980', '1985', '1990', '1995'])
 
+# convert string occupation to int job
+df['job'] = np.select([
+    (df.occupation == '0'), (df.occupation == '1'), (df.occupation == '2'), (df.occupation == '3'),
+    (df.occupation == '4'), (df.occupation == '5'), (df.occupation == '6'), (df.occupation == '7'),
+    (df.occupation == '8'), (df.occupation == '9'), ((df.occupation == 'X')|(df.occupation.isna()))
+], [0,1,2,3,4,5,6,7,8,9,-1])
+# convert string mother tongue to int lang
+df['lang'] = np.select([
+    (df.mother_tongue == 'fi'), (df.mother_tongue == 'sv'),
+    (df.mother_tongue == 'ru'), (df.mother_tongue == 'other')], [0,1,2,3])
+
 # add information for selected endpoints
 # np.select faster & easier than df.merge faster than for loop
 for i in tqdm.tqdm(range(len(eps))):
     df_events_sub = df_events[df_events.ENDPOINT == eps[i]]
-    # currently, we only want to analyze T1D as outcome
-    if i == 0:
-        df = df.merge(df_events_sub[['ID', 'AGE']].rename(columns={'AGE': 'age_onset'}), 'left', on='ID')
-        df['ch_ep' + str(i)] = np.select([
-            (df['ID'].isin(df_events_sub.ID)), (~df['ID'].isin(df_events_sub.ID))
-        ], [1, 0])
+    df['ch_ep' + str(i)] = np.select([
+        (df['ID'].isin(df_events_sub.ID)), (~df['ID'].isin(df_events_sub.ID))
+    ], [1, 0])
     df['mo_ep' + str(i)] = np.select([
         (df['mother_id'].isin(df_events_sub.ID)), (~df['mother_id'].isin(df_events_sub.ID))
     ], [1, 0])
     df['fa_ep' + str(i)] = np.select([
         (df['father_id'].isin(df_events_sub.ID)), (~df['father_id'].isin(df_events_sub.ID))
     ], [1, 0])
+    df = df.merge(df_events_sub[['ID', 'AGE']].rename(columns={'AGE': 'ch_age' + str(i)}), 'left', on='ID')
+    df = df.merge(df_events_sub[['ID', 'AGE']].rename(columns={'ID': 'mother_id', 'AGE': 'mo_age' + str(i)}),
+                  'left', on='mother_id')
+    df = df.merge(df_events_sub[['ID', 'AGE']].rename(columns={'ID': 'father_id', 'AGE': 'fa_age' + str(i)}),
+                  'left', on='father_id')
+# do we want to remove females who have GEST_DIABETES during pregnancy from cases？
 
-# in case we want to remove females who have GEST_DIABETES during pregnancy from cases
-df_events_sub = df_events[df_events.ENDPOINT == 'GEST_DIABETES']
-df['ch_gest_dm'] = np.select([(df['ID'].isin(df_events_sub.ID)), (~df['ID'].isin(df_events_sub.ID))], [1, 0])
+# how to add geo info??
+df['first_post'] = df.post_code_first.astype('str').str[:3] # ??
 
 # save the data
 df.to_csv('df.csv', index=None)
