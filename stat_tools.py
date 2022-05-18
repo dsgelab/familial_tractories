@@ -1,7 +1,8 @@
+import re
 import pandas as pd
 import numpy as np
 from scipy import stats
-
+from basic_tools import eps
 
 # function to calculate Cohen's d for independent samples
 def get_cohend(x1, x2):
@@ -20,6 +21,21 @@ def get_cohend(x1, x2):
     u1, u2 = np.mean(x1), np.mean(x2)
     # calculate the effect size
     return (u1 - u2) / s
+
+
+def sum_cases(dataset, who, threshold=20):
+    """
+    :param dataset: a DataFrame of study population
+    :param who: a string of population group - child, father or mother
+    :param threshold: an int as a threshold of minimum n_cases
+    :return: a dictionary of n_cases; a list of disease names to remove
+    """
+    who_dict = {'child': 'ch', 'mother': 'mo', 'father': 'fa'}
+    x = dataset[[i for i in dataset.columns if re.match(who_dict[who]+'_ep\d', i)]]
+    n_cases = x.sum()
+    n_cases_dict = dict(zip(eps, n_cases))
+    ep_remove = list(dict(filter(lambda item: item[1] < threshold, n_cases_dict.items())).keys())
+    return n_cases_dict, ep_remove
 
 
 def get_summary(model, X, y):

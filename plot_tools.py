@@ -7,8 +7,8 @@ from basic_tools import eps
 
 def get_ep_name(col_name):
     """
-        :param col_name: a string of column name to find out disease name
-        :return: a string of disease name or col_name if col_name is irrelevant to disease
+    :param col_name: a string of column name to find out disease name
+    :return: a string of disease name or col_name if col_name is irrelevant to disease
     """
     if re.match('^\w{2}_ep\d+$',col_name):
         ep = eps[int(re.findall('_ep(\d+)$',col_name)[0])]
@@ -47,23 +47,27 @@ def draw_distribution(dataset, main_col, sub_col, title=''):
     plt.show()
 
 
-def plot_odds_ratio(ci_mother, ci_father, eps, ep_index=0, group_delta=.3, bar_delta=.1):
+def plot_odds_ratio(ci_mother, ci_father, eps, ep_remove_mo, ep_remove_fa, ep_index=0, group_delta=.3, bar_delta=.1):
     ci_mother = list(zip(*[(1, 1) if i[1] > 20 else i for i in ci_mother]))
     ci_father = list(zip(*[(1, 1) if i[1] > 20 else i for i in ci_father]))
-
     # Create a color palette: https://www.w3schools.com/colors/colors_picker.asp
     palette = dict(zip(['Father', 'Mother', 'Child'], ['#35a6d4', '#ffa0aa', '#73b400']))
     plt.figure(figsize=(10, len(eps) / 3))
-    for lower, upper, i in zip(ci_mother[0], ci_mother[1], range(1, len(eps))):
-        plt.plot((lower + upper) / 2, i - group_delta, 'o', color=palette['Mother'])
-        plt.plot((lower, upper), (i - group_delta, i - group_delta), color=palette['Mother'])
-        plt.plot([lower, lower], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=palette['Mother'])
-        plt.plot([upper, upper], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=palette['Mother'])
-    for lower, upper, i in zip(ci_father[0], ci_father[1], range(1, len(eps))):
-        plt.plot((lower + upper) / 2, i, 'o', color=palette['Father'])
-        plt.plot((lower, upper), (i, i), color=palette['Father'])
-        plt.plot([lower, lower], [i - bar_delta, i + bar_delta], color=palette['Father'])
-        plt.plot([upper, upper], [i - bar_delta, i + bar_delta], color=palette['Father'])
+    plt.grid()
+    mo_list = [i for i in range(len(eps)) if eps[i] not in ep_remove_mo]
+    for lower, upper, i in zip(ci_mother[0], ci_mother[1], range(len(eps))):
+        if i in mo_list:
+            plt.plot((lower + upper) / 2, i - group_delta, 'o', color=palette['Mother'])
+            plt.plot((lower, upper), (i - group_delta, i - group_delta), color=palette['Mother'])
+            plt.plot([lower, lower], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=palette['Mother'])
+            plt.plot([upper, upper], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=palette['Mother'])
+    fa_list = [i for i in range(len(eps)) if eps[i] not in ep_remove_fa]
+    for lower, upper, i in zip(ci_father[0], ci_father[1], range(len(eps))):
+        if i in fa_list:
+            plt.plot((lower + upper) / 2, i, 'o', color=palette['Father'])
+            plt.plot((lower, upper), (i, i), color=palette['Father'])
+            plt.plot([lower, lower], [i - bar_delta, i + bar_delta], color=palette['Father'])
+            plt.plot([upper, upper], [i - bar_delta, i + bar_delta], color=palette['Father'])
     plt.yticks(range(len(eps)), eps)
     plt.xlabel('Odds ratio for ' + eps[ep_index] + ' diagnosis', size=14)
     plt.axvline(x=1.0, color='black', linestyle='--')
@@ -73,6 +77,7 @@ def plot_odds_ratio(ci_mother, ci_father, eps, ep_index=0, group_delta=.3, bar_d
     plt.legend(handles=handles)
     plt.grid()
     plt.show()
+
 
 def plot_odds_ratio(table, demos, eps, ep_index, ep_remove, group_delta=.1, bar_delta=.1):
     # Create a color palette: https://www.w3schools.com/colors/colors_picker.asp

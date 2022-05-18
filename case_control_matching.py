@@ -14,8 +14,8 @@ cases = df[~df.age_onset.isna()] # 15102
 control_for_match = df[df.age_onset.isna()]
 
 # get a list of possible strata
-df_for_match = cases[['ID', 'sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number']]
-match_var = [df[col].unique().tolist() for col in df_for_match.columns[1:]]
+match_list = ['sex','ch_year_range','fa_year_range','mo_year_range','sib_number']
+match_var = [df[col].unique().tolist() for col in match_list]
 match_permutation = list(itertools.product(*match_var)) # 3296000 -> 10560 -> 1734
 
 # keep only existed strata

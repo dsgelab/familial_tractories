@@ -20,13 +20,6 @@ demos = ['sex']  # , 'ever_married', 'mother_tongue', 'post_code_first', 'number
 
 df = data[['ID', 'sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number'] + demos]
 
-if 'received_social_assistance' in demos:
-    df['assisted'] = np.select([(~df.received_social_assistance.isna()), (df.received_social_assistance.isna())],
-                               [1, 0])
-    demos.remove("received_social_assistance")
-    demos += ['assisted']
-if 'ISCED97' in demos:
-    df = df[~df.ISCED97.isna()]
 
 
 
