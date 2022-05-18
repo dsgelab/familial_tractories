@@ -6,9 +6,9 @@ from scipy import stats
 # function to calculate Cohen's d for independent samples
 def get_cohend(x1, x2):
     """
-    :param x1: a DataFrame of inputs
-    :param x2: a Series of output
-    :return: a DataFrame of key statistics
+    :param x1: a Series of one samples
+    :param x2: a Series of another samples
+    :return: a float of standardized difference
     """
     # calculate the size of samples
     n1, n2 = len(x1), len(x2)
