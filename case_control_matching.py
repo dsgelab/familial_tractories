@@ -14,20 +14,22 @@ cases = df[~df.age_onset.isna()] # 15102
 control_for_match = df[df.age_onset.isna()]
 
 # get a list of possible strata
-match_list = ['sex','ch_year_range','fa_year_range','mo_year_range','sib_number']
+# METHOD 1: exact matching
+match_list = ['sex', 'ch_year', 'fa_year', 'mo_year', 'sib_number', 'province']
 match_var = [df[col].unique().tolist() for col in match_list]
 match_permutation = list(itertools.product(*match_var)) # 3296000 -> 10560 -> 1734
 
 # keep only existed strata
 match_permutation_keep = []
 for i in tqdm.tqdm(match_permutation):
-    sex, ch_year, fa_year, mo_year, sib_num = i
+    sex, ch_year, fa_year, mo_year, sib_num, province = i
     try:
         match = cases[(cases.sex == sex) &
-                      (cases.ch_year_range == ch_year) &
-                      (cases.fa_year_range == fa_year) &
-                      (cases.mo_year_range == mo_year) &
-                      (cases.sib_number == sib_num)]
+                      (cases.ch_year == ch_year) &
+                      (cases.fa_year == fa_year) &
+                      (cases.mo_year == mo_year) &
+                      (cases.sib_number == sib_num) &
+                      (cases.province == province)]
         if len(match) != 0:
             match_permutation_keep.append({'conditions': i, 'n_cases': len(match)})
 
@@ -38,31 +40,33 @@ for i in tqdm.tqdm(match_permutation):
 match_failed = []
 control_ids = []
 for i in tqdm.tqdm(match_permutation_keep):
-    sex, ch_year, fa_year, mo_year, sib_num = i['conditions']
+    sex, ch_year, fa_year, mo_year, sib_num, province = i['conditions']
     try:
-        potential_control = control_for_match[(control_for_match.sex == sex)&
-                                              (control_for_match.ch_year_range == ch_year)&
-                                              (control_for_match.fa_year_range == fa_year)&
-                                              (control_for_match.mo_year_range == mo_year)&
-                                              (control_for_match.sib_number == sib_num)]
+        potential_control = control_for_match[(control_for_match.sex == sex) &
+                                              (control_for_match.ch_year == ch_year) &
+                                              (control_for_match.fa_year == fa_year) &
+                                              (control_for_match.mo_year == mo_year) &
+                                              (control_for_match.sib_number == sib_num) &
+                                              (control_for_match.province == province)]
         if len(potential_control) < MATCH_NUM*i['n_cases']:
             match_failed.append(i)
         else:
             potential_control = potential_control.sample(n=MATCH_NUM*i['n_cases'])
             control_ids += potential_control.ID.tolist()
-    except:
+    except Exception as e:
         match_failed.append(i)
 
 # remove all the cases that cannot find enough matched controls
 cases_to_remove = []
 for i in tqdm.tqdm(match_failed):
-    sex, ch_year, fa_year, mo_year, sib_num = i['conditions']
+    sex, ch_year, fa_year, mo_year, sib_num, province = i['conditions']
     try:
         potential_not_cases = cases[(cases.sex == sex) &
                                     (cases.ch_year_range == ch_year) &
                                     (cases.fa_year_range == fa_year) &
                                     (cases.mo_year_range == mo_year) &
-                                    (cases.sib_number == sib_num)]
+                                    (cases.sib_number == sib_num) &
+                                    (cases.province == province)]
         for j in potential_not_cases.ID:
             cases_to_remove.append(j)
     except:
