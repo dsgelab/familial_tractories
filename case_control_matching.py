@@ -1,3 +1,5 @@
+"""METHOD 1: exact matching"""
+
 import pandas as pd
 import tqdm
 import itertools
@@ -14,7 +16,6 @@ cases = df[~df.age_onset.isna()] # 15102
 control_for_match = df[df.age_onset.isna()]
 
 # get a list of possible strata
-# METHOD 1: exact matching
 match_list = ['sex', 'ch_year', 'fa_year', 'mo_year', 'sib_number', 'province']
 match_var = [df[col].unique().tolist() for col in match_list]
 match_permutation = list(itertools.product(*match_var)) # 3296000 -> 10560 -> 1734
