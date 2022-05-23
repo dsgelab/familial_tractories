@@ -3,7 +3,9 @@
 import pandas as pd
 import tqdm
 import itertools
+from basic_tools import eps
 from plot_tools import draw_distribution
+from stat_tools import get_cohend, sum_cases
 
 # define matching ratio
 MATCH_NUM = 3
@@ -83,3 +85,22 @@ data.to_csv('data.csv', index=None)
 # reasonable matching
 draw_distribution(data, 'edulevel', 'ch_ep0', 'Case-control')
 draw_distribution(df, 'edulevel', 'ch_ep0', 'Study population')
+
+print('sex: ', get_cohend(data[data.ch_ep0 == 1].sex, data[data.ch_ep0 == 0].sex))
+print('ch_year: ', get_cohend(data[data.ch_ep0 == 1].ch_year, data[data.ch_ep0 == 0].ch_year))
+print('fa_year: ', get_cohend(data[data.ch_ep0 == 1].fa_year, data[data.ch_ep0 == 0].fa_year))
+print('mo_year: ', get_cohend(data[data.ch_ep0 == 1].mo_year, data[data.ch_ep0 == 0].mo_year))
+print('number_of_sib: ', get_cohend(data[data.ch_ep0 == 1].number_of_sib, data[data.ch_ep0 == 0].number_of_sib))
+print('province: ', get_cohend(data[data.ch_ep0 == 1].province, data[data.ch_ep0 == 0].province))
+print('---------------------------------------')
+for i in ['ses', 'job', 'edulevel', 'edufield', 'number_of_children', 'in_social_assistance_registries', 'in_vaccination_registry', 'in_infect_dis_registry',
+              'in_malformations_registry', 'in_cancer_registry', 'ever_married', 'lang']:
+    try:
+        print(i+': ', get_cohend(data[data.ch_ep0 == 1][i], data[data.ch_ep0 == 0][i]))
+    except ValueError:
+        print(i)
+
+# only diseases whose n_cases > 20
+n_cases_mo, ep_remove_mo = sum_cases(data, 'mother')
+n_cases_fa, ep_remove_fa = sum_cases(data, 'father')
+eps_remain = eps - set(ep_remove_mo).intersection(set(ep_remove_fa))

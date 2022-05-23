@@ -15,6 +15,8 @@ eps = ['T1D_STRICT', 'M13_RHEUMA', 'M13_RELAPSPOLYCHONDR', 'M13_SJOGREN', 'M13_S
 # eps = ['T1D_STRICT', 'E4_THYROIDITAUTOIM', 'K11_COELIAC', 'D3_ANAEMIA_B12_DEF', 'M13_RHEUMA',
 #        'L12_VITILIGO', 'GRAVES_OPHT', 'K11_CROHN']
 
+who_dict = {'child': 'ch', 'mother': 'mo', 'father': 'fa'}
+
 
 def load_data(event_path, info_path, geo_path, pedigree_path):
     logging.info('Data loading ...')
