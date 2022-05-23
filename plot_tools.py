@@ -48,27 +48,32 @@ def draw_distribution(dataset, main_col, sub_col, title=''):
 
 
 def plot_odds_ratio(results, eps, ep_remove_mo, ep_remove_fa, ep_index=0, group_delta=.3, bar_delta=.1):
+    ep_remain_num = len(eps)*2 - len(ep_remove_mo) - len(ep_remove_fa)
     df_mother = results[results.who == 'mother']
     df_father = results[results.who == 'father']
     # Create a color palette: https://www.w3schools.com/colors/colors_picker.asp
-    palette = dict(zip(['Father', 'Mother', 'Child'], ['#35a6d4', '#ffa0aa', '#73b400']))
+    palette = dict(zip(['Father', 'Mother'], ['navy', 'firebrick']))
+    palette_light = dict(zip(['Father', 'Mother'], ['royalblue', 'lightcoral']))
+    palette_bright = dict(zip(['Father', 'Mother'], ['lightblue', 'peachpuff']))
     plt.figure(figsize=(10, len(eps) / 3))
     plt.grid()
-    for lower, upper, ep in zip(df_mother.hr_025, df_mother.hr_975, df_mother.endpoint):
+    for lower, upper, ep, pval in zip(df_mother.hr_025, df_mother.hr_975, df_mother.endpoint, df_mother.pval):
         if ep not in ep_remove_mo:
             i = eps.index(ep)
-            plt.plot((lower + upper)/2, i - group_delta, 'o', color=palette['Mother'])
-            plt.plot((lower, upper), (i - group_delta, i - group_delta), color=palette['Mother'])
-            plt.plot([lower, lower], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=palette['Mother'])
-            plt.plot([upper, upper], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=palette['Mother'])
+            color = palette['Mother'] if pval <= 0.05/ep_remain_num else palette_bright['Mother'] if pval > 0.05 else palette_light['Mother']
+            plt.plot((lower + upper)/2, i - group_delta, 'o', color=color)
+            plt.plot((lower, upper), (i - group_delta, i - group_delta), color=color)
+            plt.plot([lower, lower], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=color)
+            plt.plot([upper, upper], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=color)
 
-    for lower, upper, ep in zip(df_father.hr_025, df_father.hr_975, df_father.endpoint):
+    for lower, upper, ep, pval in zip(df_father.hr_025, df_father.hr_975, df_father.endpoint, df_father.pval):
         if ep not in ep_remove_fa:
             i = eps.index(ep)
-            plt.plot((lower + upper)/2, i, 'o', color=palette['Father'])
-            plt.plot((lower, upper), (i, i), color=palette['Father'])
-            plt.plot([lower, lower], [i - bar_delta, i + bar_delta], color=palette['Father'])
-            plt.plot([upper, upper], [i - bar_delta, i + bar_delta], color=palette['Father'])
+            color = palette['Father'] if pval <= 0.05/ep_remain_num else palette_bright['Father'] if pval > 0.05 else palette_light['Father']
+            plt.plot((lower + upper)/2, i, 'o', color=color)
+            plt.plot((lower, upper), (i, i), color=color)
+            plt.plot([lower, lower], [i - bar_delta, i + bar_delta], color=color)
+            plt.plot([upper, upper], [i - bar_delta, i + bar_delta], color=color)
     plt.yticks(range(len(eps)), eps)
     plt.xlabel('Odds ratio for ' + eps[ep_index] + ' diagnosis', size=14)
     plt.axvline(x=1.0, color='black', linestyle='--')

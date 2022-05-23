@@ -102,6 +102,7 @@ for (number in seq(1,length(eps))){
                         names(data)[names(data) == ep_col_name] <- "exposure"
                         names(data)[names(data) == ch_col_name] <- "exposure_ch"
                         data_to_remove <- data %>% filter((exposure==1) & (exposure_ch==1)) %>% select(subclass)
+                        data_to_remove <- as.list(data_to_remove)$subclass
                         data <- data %>% filter(!subclass %in% data_to_remove)
                 } else {
                         data <- select(m.data, ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "ch_ep0", "subclass")
@@ -126,6 +127,7 @@ for (number in seq(1,length(eps))){
                         names(data)[names(data) == ep_col_name] <- "exposure"
                         names(data)[names(data) == ch_col_name] <- "exposure_ch"
                         data_to_remove <- data %>% filter((exposure==1) & (exposure_ch==1)) %>% select(subclass)
+                        data_to_remove <- as.list(data_to_remove)$subclass
                         data <- data %>% filter(!subclass %in% data_to_remove)
                 } else {
                         data <- select(m.data, ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "ch_ep0", "subclass")
