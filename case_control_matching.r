@@ -53,6 +53,7 @@ ep_remove_fa <- c('M13_RELAPSPOLYCHONDR',
 
 results <- NULL
 
+# use the whole matched data to do analysis
 note = "all"
 for (number in seq(1,length(eps))){
         # loop for the diseases from mothers
@@ -87,6 +88,7 @@ for (number in seq(1,length(eps))){
         }
 }
 
+# given parents' disease, remove children who had the same disease
 note = "ch_no_pa_ep"
 for (number in seq(1,length(eps))){
         # loop for the diseases from mothers
