@@ -23,7 +23,7 @@ def get_cohend(x1, x2):
     return (u1 - u2) / s
 
 
-def sum_cases(dataset, who, threshold=20):
+def sum_cases(dataset, who, threshold):
     """
     :param dataset: a DataFrame of study population
     :param who: a string of population group - child, father or mother

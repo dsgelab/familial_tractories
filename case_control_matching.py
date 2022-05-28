@@ -1,106 +1,158 @@
-"""METHOD 1: exact matching"""
+"""
+METHOD 1: exact matching
+@Author: feiyiwang
+"""
 
-import pandas as pd
 import tqdm
+import json
 import itertools
+from functools import reduce
+import pandas as pd
 from basic_tools import eps
-from plot_tools import draw_distribution
 from stat_tools import get_cohend, sum_cases
 
-# define matching ratio
+# define matching ratio and matching factors
+OUTCOME = 'T1D_STRICT'
 MATCH_NUM = 3
+MATCH_FACTORS = ['sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number', 'province']
+MATCH_FACTORS_IN_MODEL = ['sex', 'ch_year', 'fa_year', 'mo_year', 'number_of_sib', 'province']
 
-# load data
-df = pd.read_csv('df.csv')
 
-# split into case and potential control
-cases = df[~df.age_onset.isna()] # 15102
-control_for_match = df[df.age_onset.isna()]
+def case_control_matching(dataset, outcome, matching_factors, matching_number):
+    """
+    :param dataset: a DataFrame of study population
+    :param outcome: a string of a given disease
+    :param matching_factors: a list of matching factors
+        e.g. ['sex','ch_year_range','fa_year_range','mo_year_range','sib_number', 'province']
+    :param matching_number: an int indicating how many controls we need to select from the cohort
+    :return: a DataFrame of cases; a DataFrame of controls
+    """
+    # split the data into cases and cohort for controls
+    ep_index = str(eps.index(outcome))
+    cases = dataset[~dataset['ch_age'+ep_index].isna()]  # 15102
+    control_for_match = dataset[dataset['ch_age'+ep_index].isna()]
+    print('To begin with, we split the study population into', len(cases), 'potential cases and',
+          len(control_for_match), 'potential controls.')
 
-# get a list of possible strata
-match_list = ['sex', 'ch_year', 'fa_year', 'mo_year', 'sib_number', 'province']
-match_var = [df[col].unique().tolist() for col in match_list]
-match_permutation = list(itertools.product(*match_var)) # 3296000 -> 10560 -> 1734
+    # list all possible permutations using the selected matching factors
+    match_var = [dataset[col].unique().tolist() for col in matching_factors]
+    match_permutation = list(itertools.product(*match_var))  # 3296000 -> 10560 -> 1734
+    print(len(match_permutation), 'potential permutations were found.')
 
-# keep only existed strata
-match_permutation_keep = []
-for i in tqdm.tqdm(match_permutation):
-    sex, ch_year, fa_year, mo_year, sib_num, province = i
-    try:
-        match = cases[(cases.sex == sex) &
-                      (cases.ch_year == ch_year) &
-                      (cases.fa_year == fa_year) &
-                      (cases.mo_year == mo_year) &
-                      (cases.sib_number == sib_num) &
-                      (cases.province == province)]
-        if len(match) != 0:
-            match_permutation_keep.append({'conditions': i, 'n_cases': len(match)})
+    # filter out all the impossible permutations
+    match_permutation_keep = []
+    for i in tqdm.tqdm(match_permutation):
+        try:
+            conditions = [(cases[matching_factors[j]] == i[j]) for j in range(len(matching_factors))]
+            match = cases[reduce(lambda x, y: x & y, conditions)]
+            if len(match) != 0:
+                match_permutation_keep.append({'conditions': i, 'n_cases': len(match)})
+        except Exception as e:
+            print(e, i)
+    print(len(match_permutation_keep), 'possible permutations were found.')
 
-    except Exception as e:
-        print(e, i)
-
-# find failed strata to remove
-match_failed = []
-control_ids = []
-for i in tqdm.tqdm(match_permutation_keep):
-    sex, ch_year, fa_year, mo_year, sib_num, province = i['conditions']
-    try:
-        potential_control = control_for_match[(control_for_match.sex == sex) &
-                                              (control_for_match.ch_year == ch_year) &
-                                              (control_for_match.fa_year == fa_year) &
-                                              (control_for_match.mo_year == mo_year) &
-                                              (control_for_match.sib_number == sib_num) &
-                                              (control_for_match.province == province)]
-        if len(potential_control) < MATCH_NUM*i['n_cases']:
+    # filter out all the permutations that cannot find enough controls
+    match_failed = []  # >>66% -> 66% -> 39%
+    control_ids = []
+    for i in tqdm.tqdm(match_permutation_keep):
+        try:
+            conditions = [(control_for_match[matching_factors[j]] == i['conditions'][j]) for j in range(len(matching_factors))]
+            potential_control = control_for_match[reduce(lambda x, y: x & y, conditions)]
+            if len(potential_control) < matching_number * i['n_cases']:
+                match_failed.append(i)
+            else:
+                potential_control = potential_control.sample(n=matching_number * i['n_cases'])
+                control_ids += potential_control.ID.tolist()
+        except:
             match_failed.append(i)
-        else:
-            potential_control = potential_control.sample(n=MATCH_NUM*i['n_cases'])
-            control_ids += potential_control.ID.tolist()
-    except Exception as e:
-        match_failed.append(i)
+    print(len(match_failed), 'permutations failed to match to enough controls.')
 
-# remove all the cases that cannot find enough matched controls
-cases_to_remove = []
-for i in tqdm.tqdm(match_failed):
-    sex, ch_year, fa_year, mo_year, sib_num, province = i['conditions']
-    try:
-        potential_not_cases = cases[(cases.sex == sex) &
-                                    (cases.ch_year_range == ch_year) &
-                                    (cases.fa_year_range == fa_year) &
-                                    (cases.mo_year_range == mo_year) &
-                                    (cases.sib_number == sib_num) &
-                                    (cases.province == province)]
-        for j in potential_not_cases.ID:
-            cases_to_remove.append(j)
-    except:
-        print(i)
-cases = cases[~cases.ID.isin(cases_to_remove)]
-control = control_for_match[control_for_match.ID.isin(control_ids)]
+    # remove all the failed permutations from cases
+    cases_to_remove = []
+    for i in tqdm.tqdm(match_failed):
+        try:
+            conditions = [(cases[matching_factors[j]] == i['conditions'][j]) for j in range(len(matching_factors))]
+            potential_not_cases = cases[reduce(lambda x, y: x & y, conditions)]
+            for j in potential_not_cases.ID:
+                cases_to_remove.append(j)
+        except:
+            print(i)
+    print(len(cases_to_remove), 'permutations that could not be used to match enough controls were removed from cases.')
+    print('This occupies', '{:.2%}'.format(len(cases_to_remove) / len(cases)), 'of the cases.')
 
-# merge the data and save
-data = pd.concat([cases, control], axis=0, ignore_index=True)
+    # final cases and controls
+    cases = cases[~cases.ID.isin(cases_to_remove)]
+    controls = control_for_match[control_for_match.ID.isin(control_ids)]
+    print('Finally, we have', len(cases), 'cases and', len(controls), 'controls.')
+
+    return cases, controls
+
+
+def remove_unnecessary_columns(dataset, outcome, threshold=20):
+    n_cases_mo, ep_remove_mo = sum_cases(dataset, 'mother', threshold)
+    n_cases_fa, ep_remove_fa = sum_cases(dataset, 'father', threshold)
+    eps_remain = list(set(eps).difference(set(ep_remove_mo).intersection(set(ep_remove_fa))))
+    eps_remain = [i for i in eps if i in eps_remain]
+    dataset = dataset.drop(columns=['fa_ep' + str(eps.index(i)) for i in ep_remove_fa] +
+                                  ['mo_ep' + str(eps.index(i)) for i in ep_remove_mo] +
+                                  ['ch_ep' + str(eps.index(i)) for i in eps if i != outcome] +
+                                  ['fa_age' + str(eps.index(i)) for i in ep_remove_fa] +
+                                  ['mo_age' + str(eps.index(i)) for i in ep_remove_mo] +
+                                  ['ch_age' + str(eps.index(i)) for i in eps if i != outcome])
+    col_dict = {'ch_ep' + str(eps.index(outcome)): 'outcome', 'ch_age' + str(eps.index(outcome)): 'outcome_age'}
+    for i in eps_remain:
+        ep_index_old = str(eps.index(i))
+        ep_index_new = str(eps_remain.index(i))
+        if 'mo_ep' + ep_index_old in dataset.columns:
+            col_dict['mo_ep' + ep_index_old] = 'mo_ep' + ep_index_new
+        if 'mo_age' + ep_index_old in dataset.columns:
+            col_dict['mo_age' + ep_index_old] = 'mo_age' + ep_index_new
+        if 'fa_ep' + ep_index_old in dataset.columns:
+            col_dict['fa_ep' + ep_index_old] = 'fa_ep' + ep_index_new
+        if 'fa_age' + ep_index_old in dataset.columns:
+            col_dict['fa_age' + ep_index_old] = 'fa_age' + ep_index_new
+    dataset = dataset.rename(columns=col_dict)
+    return dataset, eps_remain
+
+
+def test_match_quality(dataset, outcome, matching_factors_in_model):
+    ep_index = str(eps.index(outcome))
+    for i in matching_factors_in_model:
+        print(i+': ', get_cohend(dataset[dataset['ch_ep'+ep_index] == 1][i],
+                                 dataset[dataset['ch_ep'+ep_index] == 0][i]))
+    print('---------------------------------------')
+    for i in ['ses', 'job', 'edulevel', 'edufield', 'number_of_children', 'in_social_assistance_registries',
+              'in_vaccination_registry', 'in_infect_dis_registry', 'in_malformations_registry',
+              'in_cancer_registry', 'ever_married', 'lang']:
+        try:
+            print(i + ': ', get_cohend(dataset[dataset['ch_ep' + ep_index] == 1][i],
+                                       dataset[dataset['ch_ep' + ep_index] == 0][i]))
+        except ValueError:
+            print(i)
+
+
+print('Start to load data...')
+# load data
+study_population = pd.read_csv('df.csv')
+print('Start to match...')
+case, control = case_control_matching(study_population, OUTCOME, MATCH_FACTORS, MATCH_NUM)
+
+print('Start to merge cases and controls...')
+# merge the data
+data = pd.concat([case, control], axis=0, ignore_index=True)
 data = data.sample(frac=1)
-data.to_csv('data.csv', index=None)
+# add group id to the data for conditional regression
+data['subclass'] = (data.groupby(MATCH_FACTORS).cumcount() == 0).astype(int).cumsum()
 
+print('Test the quality of the data...')
 # reasonable matching
-draw_distribution(data, 'edulevel', 'ch_ep0', 'Case-control')
-draw_distribution(df, 'edulevel', 'ch_ep0', 'Study population')
+test_match_quality(data, OUTCOME, MATCH_FACTORS_IN_MODEL)
 
-print('sex: ', get_cohend(data[data.ch_ep0 == 1].sex, data[data.ch_ep0 == 0].sex))
-print('ch_year: ', get_cohend(data[data.ch_ep0 == 1].ch_year, data[data.ch_ep0 == 0].ch_year))
-print('fa_year: ', get_cohend(data[data.ch_ep0 == 1].fa_year, data[data.ch_ep0 == 0].fa_year))
-print('mo_year: ', get_cohend(data[data.ch_ep0 == 1].mo_year, data[data.ch_ep0 == 0].mo_year))
-print('number_of_sib: ', get_cohend(data[data.ch_ep0 == 1].number_of_sib, data[data.ch_ep0 == 0].number_of_sib))
-print('province: ', get_cohend(data[data.ch_ep0 == 1].province, data[data.ch_ep0 == 0].province))
-print('---------------------------------------')
-for i in ['ses', 'job', 'edulevel', 'edufield', 'number_of_children', 'in_social_assistance_registries', 'in_vaccination_registry', 'in_infect_dis_registry',
-              'in_malformations_registry', 'in_cancer_registry', 'ever_married', 'lang']:
-    try:
-        print(i+': ', get_cohend(data[data.ch_ep0 == 1][i], data[data.ch_ep0 == 0][i]))
-    except ValueError:
-        print(i)
-
+print('Start to rename the columns and then save the data...')
 # only diseases whose n_cases > 20
-n_cases_mo, ep_remove_mo = sum_cases(data, 'mother')
-n_cases_fa, ep_remove_fa = sum_cases(data, 'father')
-eps_remain = eps - set(ep_remove_mo).intersection(set(ep_remove_fa))
+data, eps_remain = remove_unnecessary_columns(data, OUTCOME)
+# save the data
+data.to_csv('data_'+OUTCOME+'.csv', index=None)
+with open('eps_'+OUTCOME+'.json', 'w') as f:
+    json.dump(eps_remain, f)
+print('Done!')

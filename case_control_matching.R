@@ -1,5 +1,11 @@
 """METHOD 2: disease risk score matching"""
 
+"""
+Propensity score matching - https://en.wikipedia.org/wiki/Propensity_score_matching
+Introduction of MatchIt - https://imai.fas.harvard.edu/research/files/matchit.pdf
+PS matching vs DRS matching - https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4833391/
+"""
+
 install.packages('MatchIt',repo='file://data/cran/')
 library(survival)
 library(MatchIt)
