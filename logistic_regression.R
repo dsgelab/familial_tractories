@@ -1,128 +1,57 @@
-library(survival)
-library(MatchIt)
-
 setwd("~/familial_analysis")
-data <- read.csv("data_py.csv")
+library(survival)
+library(rjson)
+
+OUTCOME = "T1D_STRICT"
+m.data <- read.csv(paste0("data_",OUTCOME,".csv"))
+eps <- fromJSON(file=paste0("eps_",OUTCOME,".json"))
+
+get_stats <- function(who, number , note, dataframe) {
+    ep_col_name <- paste0(substring(who, 1, 2),'_ep',as.character(number-1))
+    data <- select(dataframe, ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "outcome", "subclass")
+    names(data)[names(data) == ep_col_name] <- "exposure"
+    n_cases <- sum(data$exposure)
+    if (n_cases < 20) {
+        res <- c(eps[number],who,NaN,NaN,NaN,NaN,NaN,note,n_cases)
+    } else {
+        model <- clogit(outcome ~ exposure + ch_year + mo_year + fa_year + number_of_sib + province + strata(subclass), data, method = "exact")
+        se <- summary(model)$coeff["exposure","se(coef)"]
+        pval <- summary(model)$coeff["exposure","Pr(>|z|)"]
+        hr <- summary(model)$conf.int["exposure","exp(coef)"]
+        hr_025 <- summary(model)$conf.int["exposure","lower .95"]
+        hr_975 <- summary(model)$conf.int["exposure","upper .95"]
+        res <- c(eps[number],who,se,pval,hr,hr_025,hr_975,note,n_cases)
+    }
+    return(res)
+}
+
 
 results <- NULL
 
 note = "all"
 for (number in seq(1,length(eps))){
-        # loop for the diseases from mothers
-        if (eps[number] %in% ep_remove_mo) {
-                results <- rbind(results,c(eps[number],"mother",NaN,NaN,NaN,NaN,NaN,note))
-        } else {
-                ep_col_name <- paste('mo','_ep',as.character(number-1), sep = '')
-                data <- select(m.data, ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "ch_ep0", "subclass")
-                names(data)[names(data) == ep_col_name] <- "exposure"
-                model <- clogit(ch_ep0 ~ exposure + ch_year + mo_year + fa_year + number_of_sib + province + strata(subclass), data, method = "exact")
-                se <- summary(model)$coeff["exposure","se(coef)"]
-                pval <- summary(model)$coeff["exposure","Pr(>|z|)"]
-                hr <- summary(model)$conf.int["exposure","exp(coef)"]
-                hr_025 <- summary(model)$conf.int["exposure","lower .95"]
-                hr_975 <- summary(model)$conf.int["exposure","upper .95"]
-                results <- rbind(results,c(eps[number],"mother",se,pval,hr,hr_025,hr_975,note))
-        }
-        # loop for the diseases from fathers
-        if (eps[number] %in% ep_remove_fa) {
-                results <- rbind(results,c(eps[number],"father",NaN,NaN,NaN,NaN,NaN,note))
-        } else {
-                ep_col_name <- paste('fa','_ep',as.character(number-1), sep = '')
-                data <- select(m.data, ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "ch_ep0", "subclass")
-                names(data)[names(data) == ep_col_name] <- "exposure"
-                model <- clogit(ch_ep0 ~ exposure + ch_year + mo_year + fa_year + number_of_sib + province + strata(subclass), data, method = "exact")
-                se <- summary(model)$coeff["exposure","se(coef)"]
-                pval <- summary(model)$coeff["exposure","Pr(>|z|)"]
-                hr <- summary(model)$conf.int["exposure","exp(coef)"]
-                hr_025 <- summary(model)$conf.int["exposure","lower .95"]
-                hr_975 <- summary(model)$conf.int["exposure","upper .95"]
-                results <- rbind(results,c(eps[number],"father",se,pval,hr,hr_025,hr_975,note))
-        }
+    # loop for the diseases from mothers
+    results <- rbind(results,get_stats("mother", number , note, m.data))
+    # loop for the diseases from fathers
+    results <- rbind(results,get_stats("father", number , note, m.data))
 }
 
 note = "boy"
 for (number in seq(1,length(eps))){
-        # loop for the diseases from mothers
-        if (eps[number] %in% ep_remove_mo) {
-                results <- rbind(results,c(eps[number],"mother",NaN,NaN,NaN,NaN,NaN,note))
-        } else {
-                ep_col_name <- paste('mo','_ep',as.character(number-1), sep = '')
-                data <- m.data %>% filter(sex==0) %>% select(ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "ch_ep0", "subclass")
-                names(data)[names(data) == ep_col_name] <- "exposure"
-                if (sum(data$exposure) < 20) {
-                        results <- rbind(results,c(eps[number],"mother",NaN,NaN,NaN,NaN,NaN,note))
-                } else {
-                        model <- clogit(ch_ep0 ~ exposure + ch_year + mo_year + fa_year + number_of_sib + province + strata(subclass), data, method = "exact")
-                        se <- summary(model)$coeff["exposure","se(coef)"]
-                        pval <- summary(model)$coeff["exposure","Pr(>|z|)"]
-                        hr <- summary(model)$conf.int["exposure","exp(coef)"]
-                        hr_025 <- summary(model)$conf.int["exposure","lower .95"]
-                        hr_975 <- summary(model)$conf.int["exposure","upper .95"]
-                        results <- rbind(results,c(eps[number],"mother",se,pval,hr,hr_025,hr_975,note))
-                }
-
-        }
-        # loop for the diseases from fathers
-        if (eps[number] %in% ep_remove_fa) {
-                results <- rbind(results,c(eps[number],"father",NaN,NaN,NaN,NaN,NaN,note))
-        } else {
-                ep_col_name <- paste('fa','_ep',as.character(number-1), sep = '')
-                data <- m.data %>% filter(sex==0) %>% select(ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "ch_ep0", "subclass")
-                names(data)[names(data) == ep_col_name] <- "exposure"
-                if (sum(data$exposure) < 20) {
-                        results <- rbind(results,c(eps[number],"mother",NaN,NaN,NaN,NaN,NaN,note))
-                } else {
-                        model <- clogit(ch_ep0 ~ exposure + ch_year + mo_year + fa_year + number_of_sib + province + strata(subclass), data, method = "exact")
-                        se <- summary(model)$coeff["exposure","se(coef)"]
-                        pval <- summary(model)$coeff["exposure","Pr(>|z|)"]
-                        hr <- summary(model)$conf.int["exposure","exp(coef)"]
-                        hr_025 <- summary(model)$conf.int["exposure","lower .95"]
-                        hr_975 <- summary(model)$conf.int["exposure","upper .95"]
-                        results <- rbind(results,c(eps[number],"father",se,pval,hr,hr_025,hr_975,note))
-                }
-        }
+    # loop for the diseases from mothers
+    results <- rbind(results,get_stats("mother", number , note, m.data %>% filter(sex==0)))
+    # loop for the diseases from fathers
+    results <- rbind(results,get_stats("father", number , note, m.data %>% filter(sex==0)))
 }
-
 
 note = "girl"
 for (number in seq(1,length(eps))){
-        # loop for the diseases from mothers
-        if (eps[number] %in% ep_remove_mo) {
-                results <- rbind(results,c(eps[number],"mother",NaN,NaN,NaN,NaN,NaN,note))
-        } else {
-                ep_col_name <- paste('mo','_ep',as.character(number-1), sep = '')
-                data <- m.data %>% filter(sex==1) %>% select(ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "ch_ep0", "subclass")
-                names(data)[names(data) == ep_col_name] <- "exposure"
-                if (sum(data$exposure) < 20) {
-                        results <- rbind(results,c(eps[number],"mother",NaN,NaN,NaN,NaN,NaN,note))
-                } else {
-                        model <- clogit(ch_ep0 ~ exposure + ch_year + mo_year + fa_year + number_of_sib + province + strata(subclass), data, method = "exact")
-                        se <- summary(model)$coeff["exposure","se(coef)"]
-                        pval <- summary(model)$coeff["exposure","Pr(>|z|)"]
-                        hr <- summary(model)$conf.int["exposure","exp(coef)"]
-                        hr_025 <- summary(model)$conf.int["exposure","lower .95"]
-                        hr_975 <- summary(model)$conf.int["exposure","upper .95"]
-                        results <- rbind(results,c(eps[number],"mother",se,pval,hr,hr_025,hr_975,note))
-                }
-
-        }
-        # loop for the diseases from fathers
-        if (eps[number] %in% ep_remove_fa) {
-                results <- rbind(results,c(eps[number],"father",NaN,NaN,NaN,NaN,NaN,note))
-        } else {
-                ep_col_name <- paste('fa','_ep',as.character(number-1), sep = '')
-                data <- m.data %>% filter(sex==1) %>% select(ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "ch_ep0", "subclass")
-                names(data)[names(data) == ep_col_name] <- "exposure"
-                if (sum(data$exposure) < 20) {
-                        results <- rbind(results,c(eps[number],"mother",NaN,NaN,NaN,NaN,NaN,note))
-                } else {
-                        model <- clogit(ch_ep0 ~ exposure + ch_year + mo_year + fa_year + number_of_sib + province + strata(subclass), data, method = "exact")
-                        se <- summary(model)$coeff["exposure","se(coef)"]
-                        pval <- summary(model)$coeff["exposure","Pr(>|z|)"]
-                        hr <- summary(model)$conf.int["exposure","exp(coef)"]
-                        hr_025 <- summary(model)$conf.int["exposure","lower .95"]
-                        hr_975 <- summary(model)$conf.int["exposure","upper .95"]
-                        results <- rbind(results,c(eps[number],"father",se,pval,hr,hr_025,hr_975,note))
-                }
-        }
+    # loop for the diseases from mothers
+    results <- rbind(results,get_stats("mother", number , note, m.data %>% filter(sex==1)))
+    # loop for the diseases from fathers
+    results <- rbind(results,get_stats("father", number , note, m.data %>% filter(sex==1)))
 }
+
+RES <- data.frame(results)
+colnames(RES) <- c("endpoint","who","se","pval","hr","hr_025","hr_975","note","n_cases")
+write.csv(RES,file=paste0("results_",OUTCOME,".csv"), row.names = FALSE)
