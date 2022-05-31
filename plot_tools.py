@@ -5,22 +5,20 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 import matplotlib as mpl
-from basic_tools import eps
 
 # Create a color palette: https://www.w3schools.com/colors/colors_picker.asp
 # https://matplotlib.org/2.0.2/examples/color/named_colors.html
-palette = dict(zip(['Father', 'Mother'], ['navy', 'firebrick']))
-palette_light = dict(zip(['Father', 'Mother'], ['royalblue', 'lightcoral']))
-palette_bright = dict(zip(['Father', 'Mother'], ['lightblue', 'peachpuff']))
+palette = dict(zip(['Father', 'Mother'], ['blue', 'tomato']))
 
 
-def get_ep_name(col_name):
+def get_ep_name(col_name, eps):
     """
     :param col_name: a string of column name to find out disease name
+    :param eps: a list of diseases
     :return: a string of disease name or col_name if col_name is irrelevant to disease
     """
-    if re.match('^\w{2}_ep\d+$',col_name):
-        ep = eps[int(re.findall('_ep(\d+)$',col_name)[0])]
+    if re.match(r'^\w{2}_ep\d+$', col_name):
+        ep = eps[int(re.findall(r'_ep(\d+)$', col_name)[0])]
         if col_name.startswith('ch_'):
             return 'children with '+ep
         elif col_name.startswith('fa_'):
@@ -56,33 +54,42 @@ def draw_distribution(dataset, main_col, sub_col, title=''):
     plt.show()
 
 
-def plot_odds_ratio(results, eps, ep_remove_mo, ep_remove_fa, ep_index=0, group_delta=.3, bar_delta=.1):
-    ep_remain_num = len(eps)*2 - len(ep_remove_mo) - len(ep_remove_fa)
+def plot_odds_ratio(results, eps, outcome, group_delta=.1, bar_cap=.1):
+    """
+    :param results: a DataFrame of summary statistics
+    :param eps: a list of diseases
+    :param outcome: a string which indicates the outcome disease name
+    :param group_delta: a float which indicates the distance between father's OR and mother's OR given the same disease
+    :param bar_cap: a float which indicates the length of error bar cap
+    :return: a odds ratio plot of all the diseases in the list
+    """
     df_mother = results[results.who == 'mother']
     df_father = results[results.who == 'father']
-
     plt.figure(figsize=(10, len(eps) / 3))
     plt.grid()
+
     for lower, upper, ep, pval in zip(df_mother.hr_025, df_mother.hr_975, df_mother.endpoint, df_mother.pval):
-        if ep not in ep_remove_mo:
-            i = eps.index(ep)
-            color = palette['Mother'] if pval <= 0.05/ep_remain_num else palette_bright['Mother'] if pval > 0.05 else palette_light['Mother']
-            plt.plot((lower + upper)/2, i - group_delta, 'o', color=color)
-            plt.plot((lower, upper), (i - group_delta, i - group_delta), color=color)
-            plt.plot([lower, lower], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=color)
-            plt.plot([upper, upper], [i - group_delta - bar_delta, i - group_delta + bar_delta], color=color)
+        i = eps.index(ep)
+        alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.4
+        plt.plot((lower + upper) / 2, i - group_delta, '.', color=palette['Mother'], alpha=alpha)
+        plt.plot((lower, upper), (i - group_delta, i - group_delta), color=palette['Mother'], alpha=alpha)
+        plt.plot([lower, lower], [i - group_delta - bar_cap, i - group_delta + bar_cap],
+                 color=palette['Mother'], alpha=alpha)
+        plt.plot([upper, upper], [i - group_delta - bar_cap, i - group_delta + bar_cap],
+                 color=palette['Mother'], alpha=alpha)
 
     for lower, upper, ep, pval in zip(df_father.hr_025, df_father.hr_975, df_father.endpoint, df_father.pval):
-        if ep not in ep_remove_fa:
-            i = eps.index(ep)
-            color = palette['Father'] if pval <= 0.05/ep_remain_num else palette_bright['Father'] if pval > 0.05 else palette_light['Father']
-            plt.plot((lower + upper)/2, i, 'o', color=color)
-            plt.plot((lower, upper), (i, i), color=color)
-            plt.plot([lower, lower], [i - bar_delta, i + bar_delta], color=color)
-            plt.plot([upper, upper], [i - bar_delta, i + bar_delta], color=color)
+        i = eps.index(ep)
+        alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.4
+        plt.plot((lower + upper) / 2, i + group_delta, '.', color=palette['Father'], alpha=alpha)
+        plt.plot((lower, upper), (i + group_delta, i + group_delta), color=palette['Father'], alpha=alpha)
+        plt.plot([lower, lower], [i + group_delta - bar_cap, i + group_delta + bar_cap],
+                 color=palette['Father'], alpha=alpha)
+        plt.plot([upper, upper], [i + group_delta - bar_cap, i + group_delta + bar_cap],
+                 color=palette['Father'], alpha=alpha)
     plt.yticks(range(len(eps)), eps)
-    plt.xlabel('Odds ratio for ' + eps[ep_index] + ' diagnosis', size=14)
-    plt.axvline(x=1.0, color='black', linestyle='--')
+    plt.xlabel('Odds ratio for ' + outcome + ' diagnosis', size=14)
+    plt.axvline(x=1.0, color='grey', linestyle='--')
     # Create legend handles manually
     handles = [mpl.patches.Patch(color=palette[x], label=x) for x in palette.keys()]
     # Create legend
@@ -92,9 +99,10 @@ def plot_odds_ratio(results, eps, ep_remove_mo, ep_remove_fa, ep_index=0, group_
 
 
 # "endpoint","who","se","pval","hr","hr_025","hr_975","note"
-def process_crossed_data(data, note_set):
-
-    res1, res2 = data[data.note == note_set[0]], data[data.note == note_set[1]]
+def process_crossed_data(data, note_tuple):
+    eps = data[data.pval < 0.05 / len(data.endpoint.unique())].endpoint.tolist()
+    data = data[data.endpoint.isin(list(set(eps)))]
+    res1, res2 = data[data.note == note_tuple[0]], data[data.note == note_tuple[1]]
 
     def process(who):
         df1 = res1[(res1.who == who) & (~res1.se.isna())][["endpoint", "pval", "hr_025", "hr_975", "se"]]
@@ -114,43 +122,50 @@ def process_crossed_data(data, note_set):
     return process('mother'), process('father')
 
 
-def plot_crossed_odds_ratio(data, note_set, name1, name2, ep_index=0):
-    df1, df2 = process_crossed_data(data, note_set)
+def plot_crossed_odds_ratio(data, note_tuple, outcome):
+    """
+    :param data: a DataFrame of summary statistics
+    :param note_tuple: a tuple which indicates the two group names
+    :param outcome: a string which indicates the outcome disease name
+    :return: a odds ratio plot of the diseases by groups
+    """
+    df1, df2 = process_crossed_data(data, note_tuple)
     plt.figure(figsize=(12, 12))
 
-    def draw_cross(data, who):
+    def draw_cross(dataset, who):
         """
-        :param data: a string of column name to find out disease name
+        :param dataset: a string of column name to find out disease name
         :param who: 'Mother', 'Father'
         :return: a string of disease name or col_name if col_name is irrelevant to disease
         """
-        for _, row in data.iterrows():
+        for _, row in dataset.iterrows():
             x, y = (row.lower1 + row.upper1) / 2, (row.lower2 + row.upper2) / 2
-            if row.hr_significant == True:
-                color = palette[who]
-                plt.plot(x, y, '.', color=color)
-                plt.plot((row.lower1, row.upper1), (y, y), color=color)
-                plt.plot((x, x), (row.lower2, row.upper2), color=color)
+            if row.hr_significant:
+                alpha = 1
+                plt.plot(x, y, '.', color=palette[who], alpha=alpha)
+                plt.plot((row.lower1, row.upper1), (y, y), color=palette[who], alpha=alpha)
+                plt.plot((x, x), (row.lower2, row.upper2), color=palette[who], alpha=alpha)
                 plt.annotate(row.endpoint, (x, y))
             else:
-                color = palette_bright[who]
-                plt.plot(x, y, '.', color=color)
+                alpha = .1
+                plt.plot(x, y, '.', color=palette[who], alpha=alpha)
 
     draw_cross(df1, 'Mother')
     draw_cross(df2, 'Father')
 
-    plt.title('Odds ratios for ' + eps[ep_index] + ' diagnosis', size=20)
-    plt.xlabel(name1, size=14)
-    plt.ylabel(name2, size=14)
+    plt.title('Odds ratios for ' + outcome + ' diagnosis', size=20)
+    plt.xlabel(note_tuple[0], size=14)
+    plt.ylabel(note_tuple[1], size=14)
     plt.xscale('log')
     plt.yscale('log')
-    plt.xticks([.2,0.5, 1, 5, 10,20, 30])
-    plt.yticks([.2,0.5, 1, 5, 10,20, 30])
+    plt.xticks([.35, 1, 5, 10, 20, 30])
+    plt.yticks([.35, 1, 5, 10, 20, 30])
+    plt.plot([.35, 30], [.35, 30], color='grey', linestyle='--')
     ax = plt.gca()
     ax.get_xaxis().set_major_formatter(ScalarFormatter())
     ax.get_yaxis().set_major_formatter(ScalarFormatter())
 
-#     plt.axline([0, 0], slope=1, color='black', linestyle='--')
+    #     plt.axline([0, 0], slope=1, color='black', linestyle='--')
     # Create legend handles manually
     handles = [mpl.patches.Patch(color=palette[x], label=x) for x in palette.keys()]
     # Create legend

@@ -1,9 +1,11 @@
 setwd("~/familial_analysis")
+library(dplyr)
 library(survival)
 library(rjson)
 
 OUTCOME = "T1D_STRICT"
 m.data <- read.csv(paste0("data_",OUTCOME,".csv"))
+m.data <- m.data %>% factor(subclass)
 eps <- fromJSON(file=paste0("eps_",OUTCOME,".json"))
 
 get_stats <- function(who, number , note, dataframe) {

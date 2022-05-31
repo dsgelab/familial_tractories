@@ -4,6 +4,7 @@ import numpy as np
 from scipy import stats
 from basic_tools import eps
 
+
 # function to calculate Cohen's d for independent samples
 def get_cohend(x1, x2):
     """
