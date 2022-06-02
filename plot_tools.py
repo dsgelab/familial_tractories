@@ -39,9 +39,9 @@ def draw_distribution(dataset, main_col, sub_col, title=''):
     :param title: a string of suptitle in case there is an extra explanation of the plot
     :return: a distribution plot of main_col by sub_col
     """
-    summary = pd.crosstab(dataset[main_col],dataset[sub_col])
+    summary = pd.crosstab(dataset[main_col], dataset[sub_col])
     summary = (100. * summary / summary.sum()).round(1)
-    summary.plot(kind='bar',figsize=(10,6))
+    summary.plot(kind='bar', figsize=(10, 6))
     full_title = 'Distribution of '+get_ep_name(main_col)+' by '+get_ep_name(sub_col)
     plt.title(full_title, size=20)
     plt.suptitle(title, size=16)
@@ -51,6 +51,23 @@ def draw_distribution(dataset, main_col, sub_col, title=''):
     plt.xticks(rotation=0, size=14)
     plt.yticks(rotation=0, size=14)
     plt.tight_layout()
+    plt.show()
+
+
+def draw_grouped_bar_plot(dataset, col_group, col_num, title, ylabel='Number of individuals'):
+    """
+    :param dataset: a DataFrame of summary statistics
+    :param col_group: a string of column name for grouping
+    :param col_num: a string of column name for numbers to display
+    :param title: a string of title in plot
+    :param ylabel: a string of title on y axis
+    :return: a distribution plot of col_num by col_group
+    """
+    dataset = dataset[['endpoint',col_group,col_num]]
+    dataset.pivot(index='endpoint', columns=[col_group], values=[col_num]).plot.bar(figsize=(20,6))
+    plt.legend(title='')
+    plt.ylabel(ylabel, size=14)
+    plt.title(title, size=20)
     plt.show()
 
 
@@ -100,11 +117,20 @@ def plot_odds_ratio(results, eps, outcome, group_delta=.1, bar_cap=.1):
 
 # "endpoint","who","se","pval","hr","hr_025","hr_975","note"
 def process_crossed_data(data, note_tuple):
-    eps = data[data.pval < 0.05 / len(data.endpoint.unique())].endpoint.tolist()
-    data = data[data.endpoint.isin(list(set(eps)))]
+    """
+    :param data: a DataFrame of summary statistics
+    :param note_tuple: a tuple which indicates the two group names
+    :return: two DataFrames of processed summary statistics
+    """
+    data_ = data[data.pval < 0.05/len(data.endpoint.unique())]
+    data = data[data.endpoint.isin(data_.endpoint.unique().tolist())]
     res1, res2 = data[data.note == note_tuple[0]], data[data.note == note_tuple[1]]
 
     def process(who):
+        """
+        :param who: 'Mother', 'Father'
+        :return: a DataFrame of processed summary statistics
+        """
         df1 = res1[(res1.who == who) & (~res1.se.isna())][["endpoint", "pval", "hr_025", "hr_975", "se"]]
         df1 = df1.rename(columns={"pval": 'p1', "hr_025": 'lower1', "hr_975": 'upper1', "se": 'se1'})
         df2 = res2[(res2.who == who) & (~res2.se.isna())][["endpoint", "pval", "hr_025", "hr_975", "se"]]
