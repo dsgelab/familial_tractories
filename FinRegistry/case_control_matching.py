@@ -9,14 +9,14 @@ import json
 import itertools
 from functools import reduce
 import pandas as pd
-from basic_tools import eps
-from plot_tools import draw_distribution
+from FinRegistry.basic_tools import eps
 from stat_tools import get_cohend, sum_cases
 
 # define matching ratio and matching factors
 OUTCOME = 'M13_RHEUMA'
 MATCH_NUM = 3
 MATCH_FACTORS = ['sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number', 'province']
+ORIGEN_FACTORS = ['sex', 'ch_year', 'fa_year', 'mo_year', 'number_of_sib', 'province']
 
 
 def case_control_matching(dataset, outcome, matching_factors, matching_number):
@@ -112,7 +112,7 @@ def remove_unnecessary_columns(dataset, outcome, threshold=20):
 
 def test_match_quality(dataset, outcome):
     ep_index = str(eps.index(outcome))
-    for i in ['sex', 'ch_year', 'fa_year', 'mo_year', 'number_of_sib', 'province']:
+    for i in ORIGEN_FACTORS:
         print(i+': ', get_cohend(dataset[dataset['ch_ep'+ep_index] == 1][i],
                                  dataset[dataset['ch_ep'+ep_index] == 0][i]))
     print('---------------------------------------')

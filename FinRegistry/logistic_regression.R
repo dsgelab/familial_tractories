@@ -4,19 +4,20 @@ library(survival)
 library(rjson)
 
 OUTCOME = "T1D_STRICT"
-m.data <- read.csv(paste0("data_",OUTCOME,".csv"))
-m.data <- m.data %>% factor(subclass)
-eps <- fromJSON(file=paste0("eps_",OUTCOME,".json"))
+m.data <- read.csv(paste0(OUTCOME,"/data_",OUTCOME,".csv"))
+m.data$subclass <- as.factor(m.data$subclass)
+eps <- fromJSON(file=paste0(OUTCOME,"/eps_",OUTCOME,".json"))
+
 
 get_stats <- function(who, number , note, dataframe) {
     ep_col_name <- paste0(substring(who, 1, 2),'_ep',as.character(number-1))
-    data <- select(dataframe, ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "province", "outcome", "subclass")
+    data <- select(dataframe, ep_col_name, "ch_year", "mo_year", "fa_year", "number_of_sib", "outcome", "subclass")
     names(data)[names(data) == ep_col_name] <- "exposure"
     n_cases <- sum(data$exposure)
     if (n_cases < 20) {
         res <- c(eps[number],who,NaN,NaN,NaN,NaN,NaN,note,n_cases)
     } else {
-        model <- clogit(outcome ~ exposure + ch_year + mo_year + fa_year + number_of_sib + province + strata(subclass), data, method = "exact")
+        model <- clogit(outcome ~ exposure + ch_year + mo_year + fa_year + number_of_sib + strata(subclass), data, method = "exact")
         se <- summary(model)$coeff["exposure","se(coef)"]
         pval <- summary(model)$coeff["exposure","Pr(>|z|)"]
         hr <- summary(model)$conf.int["exposure","exp(coef)"]
@@ -56,4 +57,4 @@ for (number in seq(1,length(eps))){
 
 RES <- data.frame(results)
 colnames(RES) <- c("endpoint","who","se","pval","hr","hr_025","hr_975","note","n_cases")
-write.csv(RES,file=paste0("results_",OUTCOME,".csv"), row.names = FALSE)
+write.csv(RES,file=paste0(OUTCOME, "/results_",OUTCOME,"_r.csv"), row.names = FALSE)

@@ -82,36 +82,37 @@ def plot_odds_ratio(results, eps, outcome, group_delta=.1, bar_cap=.1):
     """
     df_mother = results[results.who == 'mother']
     df_father = results[results.who == 'father']
-    plt.figure(figsize=(10, len(eps) / 3))
-    plt.grid()
+    plt.figure(figsize=(len(eps) / 2, 6))
+#     plt.grid()
 
     for lower, upper, ep, pval in zip(df_mother.hr_025, df_mother.hr_975, df_mother.endpoint, df_mother.pval):
         i = eps.index(ep)
-        alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.4
-        plt.plot((lower + upper) / 2, i - group_delta, '.', color=palette['Mother'], alpha=alpha)
-        plt.plot((lower, upper), (i - group_delta, i - group_delta), color=palette['Mother'], alpha=alpha)
-        plt.plot([lower, lower], [i - group_delta - bar_cap, i - group_delta + bar_cap],
+        alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.35
+        plt.plot(i - group_delta, (lower + upper) / 2, '.', color=palette['Mother'], alpha=alpha)
+        plt.plot((i - group_delta, i - group_delta), (lower, upper), color=palette['Mother'], alpha=alpha)
+        plt.plot([i - group_delta - bar_cap, i - group_delta + bar_cap], [lower, lower],
                  color=palette['Mother'], alpha=alpha)
-        plt.plot([upper, upper], [i - group_delta - bar_cap, i - group_delta + bar_cap],
+        plt.plot([i - group_delta - bar_cap, i - group_delta + bar_cap], [upper, upper],
                  color=palette['Mother'], alpha=alpha)
 
     for lower, upper, ep, pval in zip(df_father.hr_025, df_father.hr_975, df_father.endpoint, df_father.pval):
         i = eps.index(ep)
-        alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.4
-        plt.plot((lower + upper) / 2, i + group_delta, '.', color=palette['Father'], alpha=alpha)
-        plt.plot((lower, upper), (i + group_delta, i + group_delta), color=palette['Father'], alpha=alpha)
-        plt.plot([lower, lower], [i + group_delta - bar_cap, i + group_delta + bar_cap],
+        alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.35
+        plt.plot(i + group_delta, (lower + upper) / 2, '.', color=palette['Father'], alpha=alpha)
+        plt.plot((i + group_delta, i + group_delta), (lower, upper), color=palette['Father'], alpha=alpha)
+        plt.plot([i + group_delta - bar_cap, i + group_delta + bar_cap], [lower, lower],
                  color=palette['Father'], alpha=alpha)
-        plt.plot([upper, upper], [i + group_delta - bar_cap, i + group_delta + bar_cap],
+        plt.plot([i + group_delta - bar_cap, i + group_delta + bar_cap], [upper, upper],
                  color=palette['Father'], alpha=alpha)
-    plt.yticks(range(len(eps)), eps)
-    plt.xlabel('Odds ratio for ' + outcome + ' diagnosis', size=14)
-    plt.axvline(x=1.0, color='grey', linestyle='--')
+    plt.xticks(range(len(eps)), eps, rotation=90)
+    plt.ylabel('Odds ratio (95% CI)', size=14)
+    plt.axhline(y=1.0, color='black', linestyle='--', linewidth=1)
     # Create legend handles manually
-    handles = [mpl.patches.Patch(color=palette[x], label=x) for x in palette.keys()]
+    handles = [mpl.patches.Patch(color=palette[i], label=i) for i in palette.keys()]
     # Create legend
     plt.legend(handles=handles)
-    plt.grid()
+    plt.title(outcome, size=20)
+#     plt.grid()
     plt.show()
 
 

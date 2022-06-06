@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import tqdm
 import matplotlib.pyplot as plt
-from basic_tools import load_data, eps
+from FinRegistry.basic_tools import load_data, eps
 
 # load data
 first_event_path = '/data/processed_data/endpointer/densified_first_events_DF8_all_endpoints_2021-09-04.txt'
