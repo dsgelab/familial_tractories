@@ -9,7 +9,7 @@ import json
 import itertools
 from functools import reduce
 import pandas as pd
-from FinRegistry.basic_tools import eps
+from basic_tools import eps
 from stat_tools import get_cohend, sum_cases
 
 # define matching ratio and matching factors

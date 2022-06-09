@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from statsmodels.discrete import conditional_models
-from FinRegistry.basic_tools import who_dict
+from basic_tools import who_dict
 from plot_tools import plot_odds_ratio, plot_crossed_odds_ratio, draw_grouped_bar_plot
 
 OUTCOME = 'M13_RHEUMA'

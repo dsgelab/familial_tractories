@@ -2,7 +2,7 @@ import re
 import pandas as pd
 import numpy as np
 from scipy import stats
-from FinRegistry.basic_tools import eps
+from basic_tools import eps
 
 
 # function to calculate Cohen's d for independent samples
