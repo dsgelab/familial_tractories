@@ -13,7 +13,7 @@ from basic_tools import eps
 from stat_tools import get_cohend, sum_cases
 
 # define matching ratio and matching factors
-OUTCOME = 'M13_RHEUMA'
+OUTCOME = 'T1D_STRICT' #'M13_RHEUMA'
 MATCH_NUM = 3
 MATCH_FACTORS = ['sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number', 'province']
 ORIGEN_FACTORS = ['sex', 'ch_year', 'fa_year', 'mo_year', 'number_of_sib', 'province']
@@ -86,7 +86,8 @@ def case_control_matching(dataset, outcome, matching_factors, matching_number):
 def remove_unnecessary_columns(dataset, outcome, threshold=20):
     n_cases_mo, ep_remove_mo = sum_cases(dataset, 'mother', threshold)
     n_cases_fa, ep_remove_fa = sum_cases(dataset, 'father', threshold)
-    remained_eps = list(set(eps).difference(set(ep_remove_mo).intersection(set(ep_remove_fa))))
+    # remained_eps = list(set(eps).difference(set(ep_remove_mo).intersection(set(ep_remove_fa))))
+    remained_eps = list(set(eps).difference(set(ep_remove_mo).union(set(ep_remove_fa))))
     remained_eps = [i for i in eps if i in remained_eps]
     dataset = dataset.drop(columns=['fa_ep' + str(eps.index(i)) for i in ep_remove_fa] +
                                    ['mo_ep' + str(eps.index(i)) for i in ep_remove_mo] +

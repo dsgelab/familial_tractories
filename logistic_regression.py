@@ -6,12 +6,14 @@ import json
 import numpy as np
 import pandas as pd
 from statsmodels.discrete import conditional_models
+from statsmodels.stats import multitest
 from basic_tools import who_dict
 from plot_tools import plot_odds_ratio, plot_crossed_odds_ratio, draw_grouped_bar_plot
 
 OUTCOME = 'M13_RHEUMA'
 data = pd.read_csv('data_'+OUTCOME+'.csv')
 eps = json.load(open('eps_'+OUTCOME+'.json', 'r'))
+eps_remove = ['E4_GRAVES_OPHT_STRICT', 'I9_RHEUFEV', 'L12_ALOPECAREATA', 'L12_DERMATHERP', 'L12_PEMPHIGOID', 'M13_MCTD']
 
 
 def c_model(dataset, ep_index, who):
@@ -26,7 +28,20 @@ def c_model(dataset, ep_index, who):
         se = lr.bse[0]
         hr_025 = np.exp(lr.conf_int().iloc[0,0])
         hr_975 = np.exp(lr.conf_int().iloc[0,1])
-        return [endpoint, who, se, pval, hr_025, hr_975, n_cases]
+        subclass_list = []
+        for i in range(data.subclass.max()+1): # 4 secs for a loop
+            if len(data[data.subclass == i][ep_col_name].unique()) > 1:
+                subclass_list.append(i)
+        n_valid_pair00 = len(dataset[(dataset.subclass.isin(subclass_list)) &
+                                     (dataset.outcome == 0) & (dataset[ep_col_name] == 0)])
+        n_valid_pair01 = len(dataset[(dataset.subclass.isin(subclass_list)) &
+                                     (dataset.outcome == 0) & (dataset[ep_col_name] == 1)])
+        n_valid_pair10 = len(dataset[(dataset.subclass.isin(subclass_list)) &
+                                     (dataset.outcome == 1) & (dataset[ep_col_name] == 0)])
+        n_valid_pair11 = len(dataset[(dataset.subclass.isin(subclass_list)) &
+                                     (dataset.outcome == 1) & (dataset[ep_col_name] == 1)])
+        return [endpoint, who, se, pval, hr_025, hr_975, 1, len(subclass_list), n_cases,
+                n_valid_pair00, n_valid_pair01, n_valid_pair10, n_valid_pair11]
     except KeyError:
         return []
 
@@ -39,10 +54,13 @@ def model_loop(dataset, note, res_df):
             res_df = res_df.append(pd.Series(res_fa + [note], index=res.columns), ignore_index=True)
         if res_mo:
             res_df = res_df.append(pd.Series(res_mo + [note], index=res.columns), ignore_index=True)
+    dfr_sig, _ = multitest.fdrcorrection(res_df[res_df.note == note].pval)
+    res_df.loc[res_df['dfr_sig'], 'dfr_sig'] = dfr_sig
     return res_df
 
 
-res = pd.DataFrame(columns=["endpoint", "who", "se", "pval", "hr_025", "hr_975", "n_cases", "note"])
+res = pd.DataFrame(columns=["endpoint", "who", "se", "pval", "hr_025", "hr_975", 'dfr_sig', 'n_valid_group', "n_cases",
+                            'n_valid_pair00', 'n_valid_pair01', 'n_valid_pair10', 'n_valid_pair11', "note"])
 res = model_loop(data, 'all', res)
 res = model_loop(data[data.sex == 1], 'women', res)
 res = model_loop(data[data.sex == 0], 'men', res)

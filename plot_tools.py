@@ -8,7 +8,7 @@ import matplotlib as mpl
 
 # Create a color palette: https://www.w3schools.com/colors/colors_picker.asp
 # https://matplotlib.org/2.0.2/examples/color/named_colors.html
-palette = dict(zip(['Father', 'Mother'], ['blue', 'tomato']))
+palette = dict(zip(['Father', 'Mother', 'Child'], ['blue', 'tomato', 'black']))
 
 
 def get_ep_name(col_name, eps):
@@ -80,11 +80,10 @@ def plot_odds_ratio(results, eps, outcome, group_delta=.1, bar_cap=.1):
     :param bar_cap: a float which indicates the length of error bar cap
     :return: a odds ratio plot of all the diseases in the list
     """
+    plt.figure(figsize=(len(eps) / 2, 6))
+
     df_mother = results[results.who == 'mother']
     df_father = results[results.who == 'father']
-    plt.figure(figsize=(len(eps) / 2, 6))
-#     plt.grid()
-
     for lower, upper, ep, pval in zip(df_mother.hr_025, df_mother.hr_975, df_mother.endpoint, df_mother.pval):
         i = eps.index(ep)
         alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.35
@@ -112,8 +111,9 @@ def plot_odds_ratio(results, eps, outcome, group_delta=.1, bar_cap=.1):
     # Create legend
     plt.legend(handles=handles)
     plt.title(outcome, size=20)
-#     plt.grid()
     plt.show()
+
+
 
 
 # "endpoint","who","se","pval","hr","hr_025","hr_975","note"
