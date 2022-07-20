@@ -16,8 +16,7 @@ eps = json.load(open('eps_'+OUTCOME+'.json', 'r'))
 eps_remove = ['E4_GRAVES_OPHT_STRICT', 'I9_RHEUFEV', 'L12_ALOPECAREATA', 'L12_DERMATHERP', 'L12_PEMPHIGOID', 'M13_MCTD']
 
 
-def c_model(dataset, ep_index, who, ep_col_name):
-    endpoint = eps[ep_index]
+def c_model(dataset, ep_col_name):
     n_cases = dataset[ep_col_name].sum()
     lr = conditional_models.ConditionalLogit(endog=dataset.outcome,
                                              exog=dataset[ep_col_name],
@@ -38,34 +37,21 @@ def c_model(dataset, ep_index, who, ep_col_name):
                                  (dataset.outcome == 1) & (dataset[ep_col_name] == 0)])
     n_valid_pair11 = len(dataset[(dataset.subclass.isin(subclass_list)) &
                                  (dataset.outcome == 1) & (dataset[ep_col_name] == 1)])
-    return [endpoint, who, se, pval, hr_025, hr_975, 1, len(subclass_list), n_cases,
+    return [se, pval, hr_025, hr_975, len(subclass_list), n_cases,
             n_valid_pair00, n_valid_pair01, n_valid_pair10, n_valid_pair11]
 
 
-def model_loop(dataset, note, res_df):
-    for i in tqdm.tqdm(range(len(eps))):
-        ep_col_mo = 'mo_ep' + str(i)
-        ep_col_fa = 'fa_ep' + str(i)
-        if ep_col_fa in dataset:
-            res_fa = c_model(dataset, i, 'father')
-            if res_fa:
-                res_df = res_df.append(pd.Series(res_fa + [note], index=res_df.columns), ignore_index=True)
-        if ep_col_fa in dataset:
-            res_mo = c_model(dataset, i, 'mother')
-            if res_mo:
-                res_df = res_df.append(pd.Series(res_mo + [note], index=res_df.columns), ignore_index=True)
-        if (ep_col_mo in dataset) & (ep_col_fa in dataset):
-            dataset['exposure'] = dataset[ep_col_mo] | dataset[ep_col_fa]
-            res_pa = c_model(dataset, i, 'parent')
-            if res_pa:
-                res_df = res_df.append(pd.Series(res_pa + [note], index=res_df.columns), ignore_index=True)
-    dfr_sig, _ = multitest.fdrcorrection(res_df[res_df.note == note].pval)
-    res_df.loc[res_df['dfr_sig'], 'dfr_sig'] = dfr_sig
+def model_loop(dataset, who, note, res_df):
+    for ep in tqdm.tqdm(eps):
+        ep_col_name = who_dict[who] + '_' + ep
+        if ep_col_name in dataset:
+            result = c_model(dataset, ep_col_name)
+        res_df = res_df.append(pd.Series([ep, note, who] + result, index=res_df.columns), ignore_index=True)
     return res_df
 
 
-res = pd.DataFrame(columns=["endpoint", "who", "se", "pval", "hr_025", "hr_975", 'dfr_sig', 'n_valid_group', "n_cases",
-                            'n_valid_pair00', 'n_valid_pair01', 'n_valid_pair10', 'n_valid_pair11', "note"])
+res = pd.DataFrame(columns=["endpoint", "note", "who", "se", "pval", "hr_025", "hr_975", 'n_valid_group', "n_cases",
+                            'n_valid_pair00', 'n_valid_pair01', 'n_valid_pair10', 'n_valid_pair11'])
 res = model_loop(data, 'all', res)
 res = model_loop(data[data.sex == 1], 'women', res)
 res = model_loop(data[data.sex == 0], 'men', res)
