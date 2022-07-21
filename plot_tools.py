@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
-import matplotlib as mpl
 
 # Create a color palette: https://www.w3schools.com/colors/colors_picker.asp
 # https://matplotlib.org/2.0.2/examples/color/named_colors.html
@@ -71,131 +70,114 @@ def draw_grouped_bar_plot(dataset, col_group, col_num, title, ylabel='Number of 
     plt.show()
 
 
-def plot_odds_ratio(results, eps, outcome, group_delta=.1, bar_cap=.1):
+def plot_odds_ratio(dataset, outcome):
     """
-    :param results: a DataFrame of summary statistics
-    :param eps: a list of diseases
+    :param dataset: a DataFrame of summary statistics
     :param outcome: a string which indicates the outcome disease name
-    :param group_delta: a float which indicates the distance between father's OR and mother's OR given the same disease
-    :param bar_cap: a float which indicates the length of error bar cap
     :return: a odds ratio plot of all the diseases in the list
     """
-    plt.figure(figsize=(len(eps) / 2, 6))
+    dataset = dataset.sort_values(by='endpoint')
+    dataset.index = range(len(dataset))
+    plt.figure(figsize=(15, 5))
+    plt.box(False)
+    plt.grid()
+    eps_sig = []
+    for i, row in dataset.iterrows():
+        alpha = 1 if row.pval <= 0.05 / len(dataset) else 0.08
+        if alpha == 1:
+            eps_sig.append(row.endpoint)
+        plt.plot((i, i), (row.hr_025, row.hr_975), color='green', alpha=alpha)
+        plt.plot(i, (row.hr_025+row.hr_975)/2, 's', color='green', alpha=alpha)
 
-    df_mother = results[results.who == 'mother']
-    df_father = results[results.who == 'father']
-    for lower, upper, ep, pval in zip(df_mother.hr_025, df_mother.hr_975, df_mother.endpoint, df_mother.pval):
-        i = eps.index(ep)
-        alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.35
-        plt.plot(i - group_delta, (lower + upper) / 2, '.', color=palette['Mother'], alpha=alpha)
-        plt.plot((i - group_delta, i - group_delta), (lower, upper), color=palette['Mother'], alpha=alpha)
-        plt.plot([i - group_delta - bar_cap, i - group_delta + bar_cap], [lower, lower],
-                 color=palette['Mother'], alpha=alpha)
-        plt.plot([i - group_delta - bar_cap, i - group_delta + bar_cap], [upper, upper],
-                 color=palette['Mother'], alpha=alpha)
-
-    for lower, upper, ep, pval in zip(df_father.hr_025, df_father.hr_975, df_father.endpoint, df_father.pval):
-        i = eps.index(ep)
-        alpha = 1 if pval <= 0.05 / len(eps) else 0.05 if pval > 0.05 else 0.35
-        plt.plot(i + group_delta, (lower + upper) / 2, '.', color=palette['Father'], alpha=alpha)
-        plt.plot((i + group_delta, i + group_delta), (lower, upper), color=palette['Father'], alpha=alpha)
-        plt.plot([i + group_delta - bar_cap, i + group_delta + bar_cap], [lower, lower],
-                 color=palette['Father'], alpha=alpha)
-        plt.plot([i + group_delta - bar_cap, i + group_delta + bar_cap], [upper, upper],
-                 color=palette['Father'], alpha=alpha)
-    plt.xticks(range(len(eps)), eps, rotation=90)
-    plt.ylabel('Odds ratio (95% CI)', size=14)
+    plt.xticks(range(len(dataset)), dataset.endpoint.tolist(), rotation=90)
+    plt.ylabel('Odds ratio', size=12)
     plt.axhline(y=1.0, color='black', linestyle='--', linewidth=1)
-    # Create legend handles manually
-    handles = [mpl.patches.Patch(color=palette[i], label=i) for i in palette.keys()]
-    # Create legend
-    plt.legend(handles=handles)
+    plt.grid()
     plt.title(outcome, size=20)
     plt.show()
-
-
+    return eps_sig
 
 
 # "endpoint","who","se","pval","hr","hr_025","hr_975","note"
-def process_crossed_data(data, note_tuple):
+def process_crossed_data(dataset, note):
+    """
+    :param dataset: a DataFrame of summary statistics
+    :param note: 'boy', 'girl'
+    :return: a DataFrame of processed summary statistics
+    """
+    df1 = dataset[(dataset.note == note) & (dataset.who == 'father')][['endpoint',"pval", "hr_025", "hr_975", "se"]]
+    df1 = df1.rename(columns={"pval": 'p_fa', "hr_025": 'lower_fa', "hr_975": 'upper_fa', "se": 'se_fa'})
+    df2 = dataset[(dataset.note == note) & (dataset.who == 'mother')][['endpoint',"pval", "hr_025", "hr_975", "se"]]
+    df2 = df2.rename(columns={"pval": 'p_mo', "hr_025": 'lower_mo', "hr_975": 'upper_mo', "se": 'se_mo'})
+    df1 = df1.merge(df2, 'outer', on='endpoint')
+
+    df1['hr_fa'] = (df1.lower_fa + df1.upper_fa) / 2
+    df1['hr_mo'] = (df1.lower_mo + df1.upper_mo) / 2
+    df1['hr_test'] = (df1.hr_fa - df1.hr_mo) / np.sqrt(df1.se_fa ** 2 + df1.se_mo ** 2)  # t-test
+    df1['hr_p'] = 2 * scipy.stats.norm.cdf(-np.abs(df1.hr_test))
+    df1['hr_significant'] = [True if i < 0.05 / len(df1) else False for i in df1.hr_p]
+
+    return df1
+
+
+def plot_crossed_odds_ratio(data, note, color):
     """
     :param data: a DataFrame of summary statistics
-    :param note_tuple: a tuple which indicates the two group names
-    :return: two DataFrames of processed summary statistics
-    """
-    data_ = data[data.pval < 0.05/len(data.endpoint.unique())]
-    data = data[data.endpoint.isin(data_.endpoint.unique().tolist())]
-    res1, res2 = data[data.note == note_tuple[0]], data[data.note == note_tuple[1]]
-
-    def process(who):
-        """
-        :param who: 'Mother', 'Father'
-        :return: a DataFrame of processed summary statistics
-        """
-        df1 = res1[(res1.who == who) & (~res1.se.isna())][["endpoint", "pval", "hr_025", "hr_975", "se"]]
-        df1 = df1.rename(columns={"pval": 'p1', "hr_025": 'lower1', "hr_975": 'upper1', "se": 'se1'})
-        df2 = res2[(res2.who == who) & (~res2.se.isna())][["endpoint", "pval", "hr_025", "hr_975", "se"]]
-        df2 = df2.rename(columns={"pval": 'p2', "hr_025": 'lower2', "hr_975": 'upper2', "se": 'se2'})
-        df1 = df1.merge(df2, 'outer', on='endpoint')
-
-        df1['hr1'] = (df1.lower1 + df1.upper1) / 2
-        df1['hr2'] = (df1.lower2 + df1.upper2) / 2
-        df1['hr_test'] = (df1.hr1 - df1.hr2) / np.sqrt(df1.se1 ** 2 + df1.se2 ** 2)  # t-test
-        df1['hr_p'] = 2 * scipy.stats.norm.cdf(-np.abs(df1.hr_test))
-        df1['hr_significant'] = [True if i < 0.05 / len(df1) else False for i in df1.hr_p]
-
-        return df1
-
-    return process('mother'), process('father')
-
-
-def plot_crossed_odds_ratio(data, note_tuple, outcome):
-    """
-    :param data: a DataFrame of summary statistics
-    :param note_tuple: a tuple which indicates the two group names
-    :param outcome: a string which indicates the outcome disease name
+    :param note: a string which indicates the note content, boy or girl
+    :param color: a string which indicates the color to display
     :return: a odds ratio plot of the diseases by groups
     """
-    df1, df2 = process_crossed_data(data, note_tuple)
-    plt.figure(figsize=(12, 12))
+    dataset = process_crossed_data(data, note)
+    plt.figure(figsize=(8, 8))
+    plt.box(False)
 
-    def draw_cross(dataset, who):
-        """
-        :param dataset: a string of column name to find out disease name
-        :param who: 'Mother', 'Father'
-        :return: a string of disease name or col_name if col_name is irrelevant to disease
-        """
-        for _, row in dataset.iterrows():
-            x, y = (row.lower1 + row.upper1) / 2, (row.lower2 + row.upper2) / 2
-            if row.hr_significant:
-                alpha = 1
-                plt.plot(x, y, '.', color=palette[who], alpha=alpha)
-                plt.plot((row.lower1, row.upper1), (y, y), color=palette[who], alpha=alpha)
-                plt.plot((x, x), (row.lower2, row.upper2), color=palette[who], alpha=alpha)
-                plt.annotate(row.endpoint, (x, y))
-            else:
-                alpha = .1
-                plt.plot(x, y, '.', color=palette[who], alpha=alpha)
+    for _, row in dataset.iterrows():
+        x, y = row.hr_fa, row.hr_mo
+        if row.hr_significant:
+            alpha = 1
+            plt.annotate(row.endpoint, (x*1.05, y*1.05))
+        else:
+            alpha = .1
+        plt.plot(x, y, 's', color=color, alpha=alpha)
+        plt.plot((row.lower_fa, row.upper_fa), (y, y), color=color, alpha=alpha)
+        plt.plot((x, x), (row.lower_mo, row.upper_mo), color=color, alpha=alpha)
 
-    draw_cross(df1, 'Mother')
-    draw_cross(df2, 'Father')
-
-    plt.title('Odds ratios for ' + outcome + ' diagnosis', size=20)
-    plt.xlabel(note_tuple[0], size=14)
-    plt.ylabel(note_tuple[1], size=14)
+    plt.title(note, size=16)
+    plt.xlabel('Father', size=12)
+    plt.ylabel('Mother', size=12)
     plt.xscale('log')
     plt.yscale('log')
-    plt.xticks([.35, 1, 5, 10, 20, 30])
-    plt.yticks([.35, 1, 5, 10, 20, 30])
-    plt.plot([.35, 30], [.35, 30], color='grey', linestyle='--')
+    ticks = [.5, 1, 3, 12]
+    plt.xticks(ticks)
+    plt.yticks(ticks)
+    plt.plot([ticks[0], ticks[-1]], [ticks[0], ticks[-1]], color='grey', linestyle='--', linewidth=1)
     ax = plt.gca()
     ax.get_xaxis().set_major_formatter(ScalarFormatter())
     ax.get_yaxis().set_major_formatter(ScalarFormatter())
-
-    #     plt.axline([0, 0], slope=1, color='black', linestyle='--')
-    # Create legend handles manually
-    handles = [mpl.patches.Patch(color=palette[x], label=x) for x in palette.keys()]
-    # Create legend
-    plt.legend(handles=handles)
     plt.grid()
+    plt.show()
+
+
+def plot_comparisons(dataset):
+    """
+    :param dataset: a DataFrame of summary statistics
+    :return: a odds ratio plot of all the diseases in the list
+    """
+    dataset = dataset.sort_values(by='endpoint')
+    dataset.index = range(len(dataset))
+    # set up the figure: frameon=False removes frames
+    fig, (ax2, ax1) = plt.subplots(nrows=2, sharex=True, figsize=(15, 5), subplot_kw=dict(frameon=False))
+    plt.subplots_adjust(hspace=.5)
+    for i, row in dataset.iterrows():
+        alpha_rg = 1 if row.p_rg <= 0.05 / len(dataset) else 0.08
+        alpha_hr = 1 if row.p_hr <= 0.05 / len(dataset) else 0.08
+        ax1.plot((i, i), (row.rg_025, row.rg_975), color='tomato', alpha=alpha_rg)
+        ax1.plot(i, (row.rg_025+row.rg_975)/2, 's', color='tomato', alpha=alpha_rg)
+        ax2.plot((i, i), (row.hr_025, row.hr_975), color='green', alpha=alpha_hr)
+        ax2.plot(i, (row.hr_025+row.hr_975)/2, 's', color='green', alpha=alpha_hr)
+    ax1.axhline(y=0.0, color='black', linestyle='--', linewidth=1)
+    ax2.axhline(y=1.0, color='black', linestyle='--', linewidth=1)
+    plt.xticks(range(len(dataset)), dataset.endpoint.tolist(), rotation=90)
+    ax1.set_ylabel('Genetic correlation', size=12)
+    ax2.set_ylabel('Registry-based odds ratio', size=12)
     plt.show()
