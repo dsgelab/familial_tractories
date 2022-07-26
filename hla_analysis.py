@@ -6,12 +6,14 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 warnings.filterwarnings('ignore')
 
+# import imputed HLA data
 hla_data = pd.read_csv('R9_imputed_HLAs_v2.csv')
 columns = hla_data.ID.tolist()
 hla_data = hla_data.transpose()
 hla_data.columns = columns
 hla_data = hla_data.iloc[9:, :]
 
+# convert to dosage probability
 hla_df = hla_data[['A*01:01']]
 for i in tqdm.tqdm(columns):
     snp = hla_data[i].str.extract(':(.+),(.+),(.+)')
