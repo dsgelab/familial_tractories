@@ -35,8 +35,8 @@ def c_model(dataset, ep_col_name):
                                              groups=dataset.subclass).fit(disp=0)
     pval = lr.pvalues[0]
     se = lr.bse[0]
-    hr_025 = np.exp(lr.conf_int().iloc[0, 0])
-    hr_975 = np.exp(lr.conf_int().iloc[0, 1])
+    or_025 = np.exp(lr.conf_int().iloc[0, 0])
+    or_975 = np.exp(lr.conf_int().iloc[0, 1])
     subclass_list = []
     for i in range(data.subclass.max() + 1):  # 4 secs for a loop
         if len(data[data.subclass == i][ep_col_name].unique()) > 1:
@@ -49,7 +49,7 @@ def c_model(dataset, ep_col_name):
                                  (dataset.outcome == 1) & (dataset[ep_col_name] == 0)])
     n_valid_pair11 = len(dataset[(dataset.subclass.isin(subclass_list)) &
                                  (dataset.outcome == 1) & (dataset[ep_col_name] == 1)])
-    return [se, pval, hr_025, hr_975, len(subclass_list), n_cases,
+    return [se, pval, or_025, or_975, len(subclass_list), n_cases,
             n_valid_pair00, n_valid_pair01, n_valid_pair10, n_valid_pair11]
 
 
@@ -62,7 +62,7 @@ def model_loop(dataset, who, note, res_df, endpoints=eps):
     return res_df
 
 
-res = pd.DataFrame(columns=["endpoint", "note", "who", "se", "pval", "hr_025", "hr_975", 'n_valid_group', "n_cases",
+res = pd.DataFrame(columns=["endpoint", "note", "who", "se", "pval", "or_025", "or_975", 'n_valid_group', "n_cases",
                             'n_valid_pair00', 'n_valid_pair01', 'n_valid_pair10', 'n_valid_pair11'])
 res = model_loop(data, 'parent', 'all', res)
 eps_sig = plot_odds_ratio(res[res.who == 'parent'], 'T1D_STRICT')

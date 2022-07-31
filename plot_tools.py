@@ -70,10 +70,10 @@ def draw_grouped_bar_plot(dataset, col_group, col_num, title, ylabel='Number of 
     plt.show()
 
 
-def plot_odds_ratio(dataset, outcome):
+def plot_odds_ratio(dataset, color='green'):
     """
     :param dataset: a DataFrame of summary statistics
-    :param outcome: a string which indicates the outcome disease name
+    :param color: a string which indicates the color in the plot
     :return: a odds ratio plot of all the diseases in the list
     """
     dataset = dataset.sort_values(by='endpoint')
@@ -86,29 +86,28 @@ def plot_odds_ratio(dataset, outcome):
         alpha = 1 if row.pval <= 0.05 / len(dataset) else 0.08
         if alpha == 1:
             eps_sig.append(row.endpoint)
-        plt.plot((i, i), (row.hr_025, row.hr_975), color='green', alpha=alpha)
-        plt.plot(i, (row.hr_025+row.hr_975)/2, 's', color='green', alpha=alpha)
+        plt.plot((i, i), (row.or_025, row.or_975), color=color, alpha=alpha)
+        plt.plot(i, (row.or_025+row.or_975)/2, 's', color=color, alpha=alpha)
 
     plt.xticks(range(len(dataset)), dataset.endpoint.tolist(), rotation=90)
     plt.ylabel('Odds ratio', size=12)
     plt.axhline(y=1.0, color='black', linestyle='--', linewidth=1)
     plt.grid()
-    plt.title(outcome, size=20)
     plt.show()
     return eps_sig
 
 
-# "endpoint","who","se","pval","hr","hr_025","hr_975","note"
+# "endpoint","who","se","pval","or","or_025","or_975","note"
 def process_crossed_data(dataset, note):
     """
     :param dataset: a DataFrame of summary statistics
     :param note: 'boy', 'girl'
     :return: a DataFrame of processed summary statistics
     """
-    df1 = dataset[(dataset.note == note) & (dataset.who == 'father')][['endpoint',"pval", "hr_025", "hr_975", "se"]]
-    df1 = df1.rename(columns={"pval": 'p_fa', "hr_025": 'lower_fa', "hr_975": 'upper_fa', "se": 'se_fa'})
-    df2 = dataset[(dataset.note == note) & (dataset.who == 'mother')][['endpoint',"pval", "hr_025", "hr_975", "se"]]
-    df2 = df2.rename(columns={"pval": 'p_mo', "hr_025": 'lower_mo', "hr_975": 'upper_mo', "se": 'se_mo'})
+    df1 = dataset[(dataset.note == note) & (dataset.who == 'father')][['endpoint',"pval", "or_025", "or_975", "se"]]
+    df1 = df1.rename(columns={"pval": 'p_fa', "or_025": 'lower_fa', "or_975": 'upper_fa', "se": 'se_fa'})
+    df2 = dataset[(dataset.note == note) & (dataset.who == 'mother')][['endpoint',"pval", "or_025", "or_975", "se"]]
+    df2 = df2.rename(columns={"pval": 'p_mo', "or_025": 'lower_mo', "or_975": 'upper_mo', "se": 'se_mo'})
     df1 = df1.merge(df2, 'outer', on='endpoint')
 
     df1['hr_fa'] = (df1.lower_fa + df1.upper_fa) / 2
@@ -173,8 +172,8 @@ def plot_comparisons(dataset):
         alpha_hr = 1 if row.p_hr <= 0.05 / len(dataset) else 0.08
         ax1.plot((i, i), (row.rg_025, row.rg_975), color='tomato', alpha=alpha_rg)
         ax1.plot(i, (row.rg_025+row.rg_975)/2, 's', color='tomato', alpha=alpha_rg)
-        ax2.plot((i, i), (row.hr_025, row.hr_975), color='green', alpha=alpha_hr)
-        ax2.plot(i, (row.hr_025+row.hr_975)/2, 's', color='green', alpha=alpha_hr)
+        ax2.plot((i, i), (row.or_025, row.or_975), color='green', alpha=alpha_hr)
+        ax2.plot(i, (row.or_025+row.or_975)/2, 's', color='green', alpha=alpha_hr)
     ax1.axhline(y=0.0, color='black', linestyle='--', linewidth=1)
     ax2.axhline(y=1.0, color='black', linestyle='--', linewidth=1)
     plt.xticks(range(len(dataset)), dataset.endpoint.tolist(), rotation=90)
