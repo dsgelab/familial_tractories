@@ -13,13 +13,14 @@ from basic_tools import eps
 from stat_tools import get_cohend, sum_cases
 
 # define matching ratio and matching factors
+SEED = 4
 OUTCOME = 'T1D_STRICT' #'M13_RHEUMA'
 MATCH_NUM = 3
 MATCH_FACTORS = ['sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number', 'province']
 ORIGEN_FACTORS = ['sex', 'ch_year', 'fa_year', 'mo_year', 'number_of_sib', 'province']
 
 
-def case_control_matching(dataset, outcome, matching_factors, matching_number):
+def case_control_matching(dataset, outcome, matching_factors, matching_number, seed):
     """
     :param dataset: a DataFrame of study population
     :param outcome: a string of a given disease
@@ -62,7 +63,7 @@ def case_control_matching(dataset, outcome, matching_factors, matching_number):
             if len(potential_control) < matching_number * len(i['id_list']):
                 match_failed.append(i)
             else:
-                potential_control = potential_control.sample(n=matching_number * len(i['id_list']))
+                potential_control = potential_control.sample(n=matching_number * len(i['id_list']), random_state=seed)
                 index_num = match_permutation_keep.index(i)
                 for each in potential_control.ID.tolist()+i['id_list']:
                     matched_ids[each] = index_num
@@ -131,7 +132,7 @@ print('Start to load data...')
 # load data
 study_population = pd.read_csv('df.csv')
 print('Start to match...')
-data = case_control_matching(study_population, OUTCOME, MATCH_FACTORS, MATCH_NUM)
+data = case_control_matching(study_population, OUTCOME, MATCH_FACTORS, MATCH_NUM, SEED)
 
 print('Test the quality of the data...')
 # reasonable matching
