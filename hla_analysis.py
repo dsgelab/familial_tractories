@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import statsmodels.api as sm
 import seaborn as sns
-import matplotlib.pyplot as plt
 from plot_tools import plot_odds_ratio
 from statsmodels.tools.sm_exceptions import PerfectSeparationError
 from sklearn.preprocessing import MinMaxScaler
@@ -37,6 +36,7 @@ for i in tqdm.tqdm(genes):
 
 gene_sum_df['gene'] = gene_sum_df.index
 gene_sum_df.index = range(len(gene_sum_df))
+gene_sum_df = gene_sum_df.rename(columns={0.0: '0.0', 1.0: '1.0', 2.0: '2.0'})
 # remove those genes without any alt allele: 187 -> 129
 genes = gene_sum_df[(~gene_sum_df[1.0].isna()) & (~gene_sum_df[2.0].isna())].gene.tolist()
 hla_df = hla_df[genes]
@@ -57,7 +57,7 @@ for ep in tqdm.tqdm(eps):
                            [1, 0])
 
 ep_sum_df = pd.DataFrame(hla_df[eps].sum(), columns=['n_cases'])
-ep_sum_df['ep'] = ep_sum_df.index
+ep_sum_df['endpoint'] = ep_sum_df.index
 ep_sum_df.index = range(len(ep_sum_df))
 ep_sum_df['sex'] = [-1] * (len(eps) - 1) + [1]
 ep_sum_df['n_cohort'] = [len(hla_df)] * (len(eps) - 1) + [len(hla_df[hla_df.sex == 1])]
@@ -110,7 +110,7 @@ def create_stat_df(ep_list, gene_list, single=True):
     for ep_row in tqdm.tqdm(ep_sum.to_numpy()):
         if single:
             for gene in gene_list:
-                original_results = original_results.append(modeling(ep_row, gene))
+                original_results = original_results.append(modeling(ep_row, [gene]))
         else:
             original_results = original_results.append(modeling(ep_row, gene_list))
     original_results['gene'] = original_results.index
@@ -144,7 +144,7 @@ for i in ['DQA1*03:01', 'DRB1*04:01', 'DQB1*03:02', 'DRB4*01:03']:
 # create a heatmap for the results
 ep_gene_mat_sig = pd.pivot_table(res_df, values='p_sig', index=['gene'], columns=['endpoint'])
 # remove all the rows with only zeros
-ep_gene_mat_sig = ep_gene_mat_sig.iloc[~(ep_gene_mat_sig == 0).all(axis=1)]
+ep_gene_mat_sig = ep_gene_mat_sig[~(ep_gene_mat_sig == 0).all(axis=1)]
 # replace all the non-sig cells from 0 to N/A
 ep_gene_mat_sig = ep_gene_mat_sig.replace({0.:np.nan})
 ep_gene_mat_coef = pd.pivot_table(res_df, values='coef', index=['gene'], columns=['endpoint'])
@@ -154,10 +154,10 @@ ep_gene_mat_coef = ep_gene_mat_coef[ep_gene_mat_coef.index.isin(ep_gene_mat_sig.
 ep_gene_mat_coef = ep_gene_mat_sig.multiply(ep_gene_mat_coef)
 ep_gene_mat_or = np.exp(ep_gene_mat_coef)
 ep_gene_mat_or = ep_gene_mat_or.round(2)
-# remove the rows that only have N/As or negative ORs
-ep_gene_mat_or['to_keep'] = ep_gene_mat_or.apply(lambda row:1 if len((row > 1).unique()) != 1 else 0, axis=1)
-ep_gene_mat_or = ep_gene_mat_or[ep_gene_mat_or.to_keep == 1]
-ep_gene_mat_or = ep_gene_mat_or.drop(columns=['to_keep'])
+# # remove the rows that only have N/As or negative ORs
+# ep_gene_mat_or['to_keep'] = ep_gene_mat_or.apply(lambda row:1 if len((row > 1).unique()) != 1 else 0, axis=1)
+# ep_gene_mat_or = ep_gene_mat_or[ep_gene_mat_or.to_keep == 1]
+# ep_gene_mat_or = ep_gene_mat_or.drop(columns=['to_keep'])
 # use pval matrix to decide the color in the heatmap
 ep_gene_mat_pval = pd.pivot_table(res_df, values='pval', index=['gene'], columns=['endpoint'])
 ep_gene_mat_pval = ep_gene_mat_pval[ep_gene_mat_pval.index.isin(ep_gene_mat_or.index)]
@@ -179,8 +179,8 @@ ep_gene_mat_mask = ep_gene_mat_mask[ep_gene_mat_mask.index.isin(ep_gene_mat_or.i
 # convert the distribution of the matrix from normal distributed (0, 1) to normal distributed (-1, 1)
 ep_gene_mat_imp = ep_gene_mat_imp.multiply(ep_gene_mat_mask)
 # keep only those rows with strong positive association with T1D
-ep_gene_mat_or = ep_gene_mat_or[ep_gene_mat_or[OUTCOME] > 1]
-ep_gene_mat_imp = ep_gene_mat_imp[ep_gene_mat_imp.index.isin(ep_gene_mat_or.index)]
+ep_gene_mat_or_pos = ep_gene_mat_or[ep_gene_mat_or[OUTCOME] > 1]
+ep_gene_mat_imp_pos = ep_gene_mat_imp[ep_gene_mat_imp.index.isin(ep_gene_mat_or_pos.index)]
 # create a heatmap for the results
 sns.set(rc={'figure.figsize': (15, 8)})
-ax = sns.heatmap(ep_gene_mat_imp, linewidths=.5, center=0, annot=ep_gene_mat_or, cmap='RdBu')
+ax = sns.heatmap(ep_gene_mat_imp_pos, linewidths=.5, center=0, annot=ep_gene_mat_or_pos, cmap='RdBu')
