@@ -46,10 +46,10 @@ fam_path = '/finngen/library-red/finngen_R9/kinship_1.0/data/finngen_R9_pedigree
 fam = pd.read_csv(fam_path, sep='\t', header=None).rename(columns=ped_head)
 fam = fam[(fam.fater_id.str.startswith('FG')) & (fam.mother_id.str.startswith('FG'))] # 10581
 
-#
+# load hla dataset
 hla_df = pd.read.csv('hla_df.csv')
+hla_df = hla_df.merge(ped[['finngen_id']+snp_ref], 'left', on='finngen_id')
 hla_df_fam = hla_df.merge(fam[['finngen_id', 'father_id', 'mother_id']], 'inner', on='finngen_id')
-hla_df_fam = hla_df_fam.merge(ped[['finngen_id']+snp_ref], 'left', on='finngen_id')
 
 event_path = '/finngen/library-red/finngen_R9/phenotype_1.0/data/finngen_R9_endpoint_longitudinal_1.0.txt.gz'
 events = pd.read_csv(event_path, sep='\t')
@@ -67,10 +67,12 @@ eps_ads = ['T1D_STRICT', 'M13_RHEUMA', 'SLE_FG', 'AUTOIMMUNE_HYPERTHYROIDISM', '
            'D3_ANAEMIA_B12_DEF', 'K11_COELIAC', 'L12_VITILIGO', 'L12_ALOPECAREATA', 'L12_DERMATHERP']
 
 ch_cols, fa_cols, mo_cols = [i for i in eps_ads[1:]], [i+'_fa' for i in eps_ads], [i+'_mo' for i in eps_ads]
+ch_cols_, fa_cols_, mo_cols_ = [i for i in eps[1:]], [i+'_fa' for i in eps], [i+'_mo' for i in eps]
 hla_df_fam['ch_ads'] = hla_df_fam[ch_cols].sum(axis=1)
 hla_df_fam['fa_ads'] = hla_df_fam[fa_cols].sum(axis=1)
 hla_df_fam['mo_ads'] = hla_df_fam[mo_cols].sum(axis=1)
 hla_df_fam['pa_ads'] = hla_df_fam[fa_cols + mo_cols].sum(axis=1)
+hla_df_fam['pa_eps'] = hla_df_fam[fa_cols_ + mo_cols_].sum(axis=1)
 hla_df_fam['trio_ads'] = hla_df_fam[fa_cols + mo_cols + ch_cols].sum(axis=1)
 
 hla_df_fam_0 = hla_df_fam[(hla_df_fam.fa_ads == 0) & (hla_df_fam.mo_ads == 0) & (hla_df_fam.T1D_STRICT == 1)] # 738
@@ -82,6 +84,10 @@ selected_genes = ['DQB1*03:02', 'DQB1*02:01', 'DRB5*01:01', 'DQB1*04:02', 'DQB1*
                   'DRB1*09:01', 'DRB1*10:01', 'DRB1*13:01']
 
 # chi-squared test with similar proportions
+# to check the SNP AF:
+# https://gnomad.broadinstitute.org/variant/1-113834946-A-G?dataset=gnomad_r3
+# Comparison 1: children whose parents have selected ADs vs children whose parents have no AD
+# if child inherits healthy blocks of genes from parents in group 1?
 for i in snp_ref+selected_genes:
     s0 = hla_df_fam_0[i].round().value_counts()
     s1 = hla_df_fam_1[i].round().value_counts()
@@ -93,6 +99,32 @@ for i in snp_ref+selected_genes:
     ]
     if table[0][2] == 0 and table[1][2] == 0:
         table = [table[0][:2], table[1][:2]]
+    if table[0][1] == 0 and table[1][1] == 0:
+        pass
+    else:
+        try:
+            res = chi2_contingency(table) # stat, p, dof, expected
+            if res[1] < 0.05:
+                print(i, ' : ', res[1])
+                print(table)
+        except ValueError:
+            print(i, ' : ')
+            print(table)
+
+# Comparison 2: children who have selected ADs vs children without any ADs
+hla_df['ch_ads'] = hla_df[ch_cols].sum(axis=1)
+hla_df['ch_eps'] = hla_df[ch_cols_].sum(axis=1)
+hla_df_0 = hla_df[(hla_df.ch_eps == 0) & (hla_df.T1D_STRICT == 1)] # ch_eps:2099 ch_ads:2605
+hla_df_1 = hla_df[(hla_df.ch_ads != 0) & (hla_df.T1D_STRICT == 1)] # ch_ads:795
+for i in snp_ref+selected_genes:
+    s0 = hla_df_0[i].round().value_counts()
+    s1 = hla_df_1[i].round().value_counts()
+    table = [
+        [dict(s0).get(0.0, 0), dict(s0).get(1.0, 0), dict(s0).get(2.0, 0)],
+        [dict(s1).get(0.0, 0), dict(s1).get(1.0, 0), dict(s1).get(2.0, 0)]
+    ]
+    if table[0][2] == 0 and table[1][2] == 0:
+        table = [table[0][:2], table[1][:2]]
     try:
         res = chi2_contingency(table) # stat, p, dof, expected
         if res[1] < 0.05:
@@ -101,5 +133,4 @@ for i in snp_ref+selected_genes:
     except ValueError:
         print(i, ' : ')
         print(table)
-
 
