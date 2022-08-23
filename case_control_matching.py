@@ -169,3 +169,33 @@ data.to_csv('data_'+OUTCOME+'.csv', index=None)
 with open('eps_'+OUTCOME+'.json', 'w') as f:
     json.dump(eps_remain, f)
 print('Done!')
+
+
+
+# study_population = pd.read_csv('df.csv')
+# df = study_population[['ID','ch_ep0', 'ch_age0', 'ch_year', 'sex']]
+# dff = df[df.sex == 1]
+# dfm = df[df.sex == 0]
+# f = dict(dff.ch_year.value_counts())
+# m = dict(dfm.ch_year.value_counts())
+#
+# agef = [i for i in range(0, 2020-1960+1)]
+# numf = dict(zip(agef, [0]*len(agef)))
+# for j in sorted(list(f.keys())):
+#     num = 2020 - j
+#     for i in range(0, num+1):
+#         numf[i] += f[j]
+# f1 = dict(dff[~dff.ch_age0.isna()].ch_age0.round(0).astype(int).value_counts())
+# fy = [f1.get(i, 0)/numf[i]*1000000 for i in range(0,61)]
+#
+# agem = [i for i in range(0, 2020-1960+1)]
+# numm = dict(zip(agem, [0]*len(agem)))
+# for j in sorted(list(m.keys())):
+#     num = 2020 - j
+#     for i in range(0, num+1):
+#         numm[i] += m[j]
+# m1 = dict(dfm[~dfm.ch_age0.isna()].ch_age0.round(0).astype(int).value_counts())
+# my = [f1.get(i, 0)/numm[i]*1000000 for i in range(0,61)]
+#
+# plt.plot(range(0,61), fy)
+# plt.plot(range(0,61), my)

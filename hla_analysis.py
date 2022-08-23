@@ -24,21 +24,22 @@ hla_data = hla_data.iloc[9:, :]
 hla_df = hla_data[['A*01:01']]
 gene_sum_df = pd.DataFrame(columns=[0.0, 1.0, 2.0])
 for i in tqdm.tqdm(genes):
-    gene = hla_data[i].str.extract(':(.+),(.+),(.+)')
-    gene['dose_str'] = hla_data[i].extract('(.+):')
-    gene['dose_int'] = np.select([(gene.dose_str == './.'), (gene.dose_str == '0/0'), (gene.dose_str == '0/1'),
-                                  (gene.dose_str == '1/1')], [-1.0, 0.0, 1.0, 2.0])
-    a = gene[0].astype(float) * 0 + gene[1].astype(float) * 1 + gene[2].astype(float) * 2
+    genotype = hla_data[i].str.extract(':(.+),(.+),(.+)')
+    genotype['dose_str'] = hla_data[i].extract('(.+):')
+    genotype['dose_int'] = np.select([(genotype.dose_str == './.'), (genotype.dose_str == '0/0'),
+                                      (genotype.dose_str == '0/1'), (genotype.dose_str == '1/1')],
+                                     [-1.0, 0.0, 1.0, 2.0])
+    a = genotype[0].astype(float) * 0 + genotype[1].astype(float) * 1 + genotype[2].astype(float) * 2
     a1, a2 = a[~a.isna()], a[a.isna()]
-    a2 = gene[gene.index.isin(a2.keys())].dose_int
+    a2 = genotype[genotype.index.isin(a2.keys())].dose_int
     hla_df[i] = a1.append(a2)
     gene_sum_df = gene_sum_df.append(round(hla_df[i]).value_counts().T)
 
-gene_sum_df['gene'] = gene_sum_df.index
+gene_sum_df['genotype'] = gene_sum_df.index
 gene_sum_df.index = range(len(gene_sum_df))
 gene_sum_df = gene_sum_df.rename(columns={0.0: '0.0', 1.0: '1.0', 2.0: '2.0'})
 # remove those genes without any alt allele: 187 -> 129
-genes = gene_sum_df[(~gene_sum_df[1.0].isna()) & (~gene_sum_df[2.0].isna())].gene.tolist()
+genes = gene_sum_df[(~gene_sum_df[1.0].isna()) & (~gene_sum_df[2.0].isna())].genotype.tolist()
 hla_df = hla_df[genes]
 
 # import confounding cols
@@ -109,12 +110,12 @@ def create_stat_df(ep_list, gene_list, single=True):
     ep_sum = ep_sum_df[ep_sum_df.endpoint.isin(ep_list)]
     for ep_row in tqdm.tqdm(ep_sum.to_numpy()):
         if single:
-            for gene in gene_list:
-                original_results = original_results.append(modeling(ep_row, [gene]))
+            for genotype in gene_list:
+                original_results = original_results.append(modeling(ep_row, [genotype]))
         else:
             original_results = original_results.append(modeling(ep_row, gene_list))
-    original_results['gene'] = original_results.index
-    processed_results = original_results[['gene']+key_cols[-3:]+key_cols[:4]].drop(columns='z')
+    original_results['genotype'] = original_results.index
+    processed_results = original_results[['genotype']+key_cols[-3:]+key_cols[:4]].drop(columns='z')
     rename_dict = {key_cols[0]: 'coef', key_cols[1]: 'se', key_cols[3]: 'pval'}
     processed_results = processed_results.rename(columns=rename_dict)
     processed_results['or_025'] = np.exp(original_results[key_cols[4]])
@@ -122,16 +123,21 @@ def create_stat_df(ep_list, gene_list, single=True):
     processed_results['or_500'] = np.exp(original_results[key_cols[0]])
     processed_results['p_sig'] = np.select([(processed_results.pval > 0.05/len(gene_list)),
                                             (processed_results.pval <= 0.05/len(gene_list))], [0, 1])
-    processed_results = processed_results.merge(gene_sum_df, 'left', on='gene')
+    processed_results = processed_results.merge(gene_sum_df, 'left', on='genotype')
     return processed_results
 
 
-# find out the most significant hla genes that associated with T1D
+# find out the most significant hla genotypes that associated with T1D
+# Method One:
 res_df_1 = create_stat_df([OUTCOME], genes)
 print(res_df_1[res_df_1.pval == res_df_1.pval.min()])
 # Four genes are strongly associated with T1D (pval = 0.0): DQA1*03:01 DRB1*04:01 DQB1*03:02 DRB4*01:03
-# 87 genes are significant
+# 87 genotypes are significant
 _ = plot_odds_ratio(res_df_1[res_df_1.p_sig == 1])
+# Method Two: use conditional analysis
+# in each loop, add the most significant hla genotype as a covariate
+# genotypes are significant
+
 
 # obtain stats for selected endpoints and save the results
 res_df = create_stat_df(eps, genes)
@@ -139,15 +145,15 @@ res_df.to_csv('hla_res.csv', index=None)
 
 # plot the associations between all the endpoints and each of the 4 most significant genes for T1D
 for i in ['DQA1*03:01', 'DRB1*04:01', 'DQB1*03:02', 'DRB4*01:03']:
-    _ = plot_odds_ratio(res_df[res_df.gene == i])
+    _ = plot_odds_ratio(res_df[res_df.genotype == i])
 
 # create a heatmap for the results
-ep_gene_mat_sig = pd.pivot_table(res_df, values='p_sig', index=['gene'], columns=['endpoint'])
+ep_gene_mat_sig = pd.pivot_table(res_df, values='p_sig', index=['genotype'], columns=['endpoint'])
 # remove all the rows with only zeros
 ep_gene_mat_sig = ep_gene_mat_sig[~(ep_gene_mat_sig == 0).all(axis=1)]
 # replace all the non-sig cells from 0 to N/A
 ep_gene_mat_sig = ep_gene_mat_sig.replace({0.:np.nan})
-ep_gene_mat_coef = pd.pivot_table(res_df, values='coef', index=['gene'], columns=['endpoint'])
+ep_gene_mat_coef = pd.pivot_table(res_df, values='coef', index=['genotype'], columns=['endpoint'])
 # shrink the coef matrix to the size of sig matrix, so can go the next step
 ep_gene_mat_coef = ep_gene_mat_coef[ep_gene_mat_coef.index.isin(ep_gene_mat_sig.index)]
 # only keep those sig coefficients
@@ -159,7 +165,7 @@ ep_gene_mat_or = ep_gene_mat_or.round(2)
 # ep_gene_mat_or = ep_gene_mat_or[ep_gene_mat_or.to_keep == 1]
 # ep_gene_mat_or = ep_gene_mat_or.drop(columns=['to_keep'])
 # use pval matrix to decide the color in the heatmap
-ep_gene_mat_pval = pd.pivot_table(res_df, values='pval', index=['gene'], columns=['endpoint'])
+ep_gene_mat_pval = pd.pivot_table(res_df, values='pval', index=['genotype'], columns=['endpoint'])
 ep_gene_mat_pval = ep_gene_mat_pval[ep_gene_mat_pval.index.isin(ep_gene_mat_or.index)]
 for i in ep_gene_mat_pval.columns:
     print(ep_gene_mat_pval[i].min()) # select -300 from this step for delta added to pval == 0.0
