@@ -29,28 +29,31 @@ data = data[['sex', 'subclass', 'outcome']+list(rename_dict.values())]
 
 
 def c_model(dataset, ep_col_name):
-    n_cases = dataset[ep_col_name].sum()
-    lr = conditional_models.ConditionalLogit(endog=dataset.outcome,
-                                             exog=dataset[ep_col_name],
-                                             groups=dataset.subclass).fit(disp=0)
-    pval = lr.pvalues[0]
-    se = lr.bse[0]
-    or_025 = np.exp(lr.conf_int().iloc[0, 0])
-    or_975 = np.exp(lr.conf_int().iloc[0, 1])
-    subclass_list = []
-    for i in range(data.subclass.max() + 1):  # 4 secs for a loop
-        if len(data[data.subclass == i][ep_col_name].unique()) > 1:
-            subclass_list.append(i)
-    n_valid_pair00 = len(dataset[(dataset.subclass.isin(subclass_list)) &
-                                 (dataset.outcome == 0) & (dataset[ep_col_name] == 0)])
-    n_valid_pair01 = len(dataset[(dataset.subclass.isin(subclass_list)) &
-                                 (dataset.outcome == 0) & (dataset[ep_col_name] == 1)])
-    n_valid_pair10 = len(dataset[(dataset.subclass.isin(subclass_list)) &
-                                 (dataset.outcome == 1) & (dataset[ep_col_name] == 0)])
-    n_valid_pair11 = len(dataset[(dataset.subclass.isin(subclass_list)) &
-                                 (dataset.outcome == 1) & (dataset[ep_col_name] == 1)])
-    return [se, pval, or_025, or_975, len(subclass_list), n_cases,
-            n_valid_pair00, n_valid_pair01, n_valid_pair10, n_valid_pair11]
+    try:
+        n_cases = dataset[ep_col_name].sum()
+        lr = conditional_models.ConditionalLogit(endog=dataset.outcome,
+                                                 exog=dataset[ep_col_name],
+                                                 groups=dataset.subclass).fit(disp=0)
+        pval = lr.pvalues[0]
+        se = lr.bse[0]
+        or_025 = np.exp(lr.conf_int().iloc[0, 0])
+        or_975 = np.exp(lr.conf_int().iloc[0, 1])
+        subclass_list = []
+        for i in range(data.subclass.max() + 1):  # 4 secs for a loop
+            if len(data[data.subclass == i][ep_col_name].unique()) > 1:
+                subclass_list.append(i)
+        n_valid_pair00 = len(dataset[(dataset.subclass.isin(subclass_list)) &
+                                     (dataset.outcome == 0) & (dataset[ep_col_name] == 0)])
+        n_valid_pair01 = len(dataset[(dataset.subclass.isin(subclass_list)) &
+                                     (dataset.outcome == 0) & (dataset[ep_col_name] == 1)])
+        n_valid_pair10 = len(dataset[(dataset.subclass.isin(subclass_list)) &
+                                     (dataset.outcome == 1) & (dataset[ep_col_name] == 0)])
+        n_valid_pair11 = len(dataset[(dataset.subclass.isin(subclass_list)) &
+                                     (dataset.outcome == 1) & (dataset[ep_col_name] == 1)])
+        return [se, pval, or_025, or_975, len(subclass_list), n_cases,
+                n_valid_pair00, n_valid_pair01, n_valid_pair10, n_valid_pair11]
+    except ValueError:
+        pass
 
 
 def model_loop(dataset, who, note, res_df, endpoints=eps):
@@ -66,10 +69,18 @@ res = pd.DataFrame(columns=["endpoint", "note", "who", "se", "pval", "or_025", "
                             'n_valid_pair00', 'n_valid_pair01', 'n_valid_pair10', 'n_valid_pair11'])
 res = model_loop(data, 'parent', 'all', res)
 eps_sig = plot_odds_ratio(res[res.who == 'parent'], 'T1D_STRICT')
-res = model_loop(data[data.sex == 0], 'father', 'boy', res, eps_sig)
-res = model_loop(data[data.sex == 1], 'father', 'girl', res, eps_sig)
-res = model_loop(data[data.sex == 0], 'mother', 'boy', res, eps_sig)
-res = model_loop(data[data.sex == 1], 'mother', 'girl', res, eps_sig)
+# comparisons between fathers and mothers
+res = model_loop(data, 'father', 'all', res, eps_sig)
+res = model_loop(data, 'mother', 'all', res, eps_sig)
+# comparisons between sons and daughters
+res = model_loop(data[data.sex == 0], 'parent', 'boy', res, eps_sig)
+res = model_loop(data[data.sex == 1], 'parent', 'girl', res, eps_sig)
+# belows are too complex to understand
+# comparisons between fathers and mothers for sons and daughters separately
+# res = model_loop(data[data.sex == 0], 'father', 'boy', res, eps_sig)
+# res = model_loop(data[data.sex == 1], 'father', 'girl', res, eps_sig)
+# res = model_loop(data[data.sex == 0], 'mother', 'boy', res, eps_sig)
+# res = model_loop(data[data.sex == 1], 'mother', 'girl', res, eps_sig)
 # summary statistics after removing those whose parents were born after 1961
 data_sub = data[(data.fa_year_range < 1960) & (data.mo_year_range < 1960)]
 res = model_loop(data_sub, 'all_sub', res)
