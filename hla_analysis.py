@@ -115,7 +115,7 @@ def create_stat_df(ep_list, gene_list, single=True):
         else:
             original_results = original_results.append(modeling(ep_row, gene_list))
     original_results['genotype'] = original_results.index
-    processed_results = original_results[['genotype']+key_cols[-3:]+key_cols[:4]].drop(columns='z')
+    processed_results = original_results[['genotype']+key_cols[-3:]+key_cols[:4]]#.drop(columns='z')
     rename_dict = {key_cols[0]: 'coef', key_cols[1]: 'se', key_cols[3]: 'pval'}
     processed_results = processed_results.rename(columns=rename_dict)
     processed_results['or_025'] = np.exp(original_results[key_cols[4]])
@@ -189,4 +189,37 @@ ep_gene_mat_or_pos = ep_gene_mat_or[ep_gene_mat_or[OUTCOME] > 1]
 ep_gene_mat_imp_pos = ep_gene_mat_imp[ep_gene_mat_imp.index.isin(ep_gene_mat_or_pos.index)]
 # create a heatmap for the results
 sns.set(rc={'figure.figsize': (15, 8)})
-ax = sns.heatmap(ep_gene_mat_imp_pos, linewidths=.5, center=0, annot=ep_gene_mat_or_pos, cmap='RdBu')
+ax = sns.heatmap(ep_gene_mat_imp_pos, linewidths=.5, center=0, annot=ep_gene_mat_or_pos, cmap='RdBu', fmt='')
+ax.set_facecolor('#f7f7f7')
+ax.collections[0].colorbar.set_label('z score')
+
+
+# HLA PRS analysis
+# split the data to training set and test set by 6:4
+test_size = 0.4
+seed = 4
+hla_df_train = hla_df.sample(n=int(test_size * len(hla_df)), random_state=seed)
+hla_df_test = hla_df[~hla_df.finngen_id.isin(hla_df_train.finngen_id)]
+
+
+def filter_genotypes(dataset):
+    conditions_to_add = []
+    genotypes_to_check = genes
+    while len(genotypes_to_check) > 0:
+        stat_df = create_stat_df([OUTCOME], genotypes_to_check, dataset, conditions_to_add)
+        stat_df = stat_df[stat_df.pval < 0.05/len(genes)]
+        if len(stat_df) == 0:
+            break
+        genotypes_to_check = stat_df.gene.tolist()
+        stat_df['filters'] = stat_df.coef/stat_df.se
+        most_sig_genotype = stat_df[stat_df.filters == stat_df.filters.max()].gene.tolist()[0]
+        conditions_to_add.append(most_sig_genotype)
+        print('len_remained:', len(stat_df), '; selected:', conditions_to_add)
+    results = create_stat_df([OUTCOME], conditions_to_add, hla_df_train)
+    return results
+
+
+res_train = filter_genotypes(hla_df_train)
+res_all = filter_genotypes(hla_df)
+
+

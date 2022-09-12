@@ -104,8 +104,8 @@ def model_loop(note, res_df, model_name):
             index_num = eps.index(ep)
             res_fa = regression(index_num, 'father', model_name)
             res_mo = regression(index_num, 'mother', model_name)
-            res_df = res_df.append(pd.Series([ep] + res_fa + [note], index=res.columns), ignore_index=True)
-            res_df = res_df.append(pd.Series([ep] + res_mo + [note], index=res.columns), ignore_index=True)
+            res_df = res_df.append(pd.Series([ep] + res_fa + [note], index=res_df.columns), ignore_index=True)
+            res_df = res_df.append(pd.Series([ep] + res_mo + [note], index=res_df.columns), ignore_index=True)
     return res_df
 
 
