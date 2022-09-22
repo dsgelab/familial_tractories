@@ -4,6 +4,7 @@ import warnings
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
+from basic_tools import eps_selected, eps_dict
 import seaborn as sns
 from plot_tools import plot_odds_ratio
 from statsmodels.tools.sm_exceptions import PerfectSeparationError
@@ -127,6 +128,24 @@ def create_stat_df(ep_list, gene_list, single=True):
     return processed_results
 
 
+# create a heatmap for the results
+def plot_heatmap(stat_df):
+    ep_gene_mat_pval = pd.pivot_table(stat_df, values='pval', index=['genotype'], columns=['endpoint'])
+    ep_gene_mat_sig = np.select([(ep_gene_mat_pval > 0.05 / len(genes)), (ep_gene_mat_pval <= 0.05 / len(genes))],
+                                ['', '*'])
+    ep_gene_mat_sig = pd.DataFrame(ep_gene_mat_sig, columns=ep_gene_mat_pval.columns, index=ep_gene_mat_pval.index)
+    ep_gene_mat_z = pd.pivot_table(stat_df, values='z', index=['genotype'], columns=['endpoint'])
+    for i in ep_gene_mat_z[ep_gene_mat_z[OUTCOME] < 0].index:
+        ep_gene_mat_z.loc[i, :] = ep_gene_mat_z.loc[i, :] * -1
+    # convert endpoint codes to disease names
+    ep_gene_mat_z.columns = [eps_dict[i] for i in ep_gene_mat_z.columns]
+    # create a heatmap for the results
+    sns.set(rc={'figure.figsize': (20, 6)})
+    ax = sns.heatmap(ep_gene_mat_z, linewidths=.5, center=0, annot=ep_gene_mat_sig, cmap='RdBu', fmt='')
+    ax.set_facecolor('#f7f7f7')
+    ax.collections[0].colorbar.set_label('z score')
+
+
 # find out the most significant hla genotypes that associated with T1D
 # Method One:
 res_df_1 = create_stat_df([OUTCOME], genes)
@@ -147,61 +166,8 @@ res_df.to_csv('hla_res.csv', index=None)
 for i in ['DQA1*03:01', 'DRB1*04:01', 'DQB1*03:02', 'DRB4*01:03']:
     _ = plot_odds_ratio(res_df[res_df.genotype == i])
 
-# create a heatmap for the results
-ep_gene_mat_sig = pd.pivot_table(res_df, values='p_sig', index=['genotype'], columns=['endpoint'])
-# remove all the rows with only zeros
-ep_gene_mat_sig = ep_gene_mat_sig[~(ep_gene_mat_sig == 0).all(axis=1)]
-# replace all the non-sig cells from 0 to N/A
-ep_gene_mat_sig = ep_gene_mat_sig.replace({0.:np.nan})
-ep_gene_mat_coef = pd.pivot_table(res_df, values='coef', index=['genotype'], columns=['endpoint'])
-# shrink the coef matrix to the size of sig matrix, so can go the next step
-ep_gene_mat_coef = ep_gene_mat_coef[ep_gene_mat_coef.index.isin(ep_gene_mat_sig.index)]
-# only keep those sig coefficients
-ep_gene_mat_coef = ep_gene_mat_sig.multiply(ep_gene_mat_coef)
-ep_gene_mat_or = np.exp(ep_gene_mat_coef)
-ep_gene_mat_or = ep_gene_mat_or.round(2)
-# # remove the rows that only have N/As or negative ORs
-# ep_gene_mat_or['to_keep'] = ep_gene_mat_or.apply(lambda row:1 if len((row > 1).unique()) != 1 else 0, axis=1)
-# ep_gene_mat_or = ep_gene_mat_or[ep_gene_mat_or.to_keep == 1]
-# ep_gene_mat_or = ep_gene_mat_or.drop(columns=['to_keep'])
-# use pval matrix to decide the color in the heatmap
-ep_gene_mat_pval = pd.pivot_table(res_df, values='pval', index=['genotype'], columns=['endpoint'])
-ep_gene_mat_pval = ep_gene_mat_pval[ep_gene_mat_pval.index.isin(ep_gene_mat_or.index)]
-for i in ep_gene_mat_pval.columns:
-    print(ep_gene_mat_pval[i].min()) # select -300 from this step for delta added to pval == 0.0
-# transform the distribution of the pval matrix from (0, 1) to inverse (0, 1)
-ep_gene_mat_imp = -np.log10(ep_gene_mat_pval + 10**(-300))
-# remove those non-sig ones
-ep_gene_mat_imp = ep_gene_mat_imp.multiply(ep_gene_mat_sig)
-# transform the distribution of the matrix from (0.995, 1) to normal distributed (0, 1)
-scaler = MinMaxScaler()
-ep_gene_mat_imp = scaler.fit_transform(ep_gene_mat_imp)
-ep_gene_mat_imp = pd.DataFrame(ep_gene_mat_imp, columns=ep_gene_mat_or.columns, index=ep_gene_mat_or.index)
-# create a mask matrix for only those sig coefficients with positive/negative sign
-ep_gene_mat_mask = np.select([(ep_gene_mat_coef > 0), (ep_gene_mat_coef < 0), (ep_gene_mat_coef.isna())],
-                             [1, -1, np.nan])
-ep_gene_mat_mask = pd.DataFrame(ep_gene_mat_mask, columns=ep_gene_mat_coef.columns, index=ep_gene_mat_coef.index)
-ep_gene_mat_mask = ep_gene_mat_mask[ep_gene_mat_mask.index.isin(ep_gene_mat_or.index)]
-# convert the distribution of the matrix from normal distributed (0, 1) to normal distributed (-1, 1)
-ep_gene_mat_imp = ep_gene_mat_imp.multiply(ep_gene_mat_mask)
-# keep only those rows with strong positive association with T1D
-ep_gene_mat_or_pos = ep_gene_mat_or[ep_gene_mat_or[OUTCOME] > 1]
-ep_gene_mat_imp_pos = ep_gene_mat_imp[ep_gene_mat_imp.index.isin(ep_gene_mat_or_pos.index)]
-# create a heatmap for the results
-sns.set(rc={'figure.figsize': (15, 8)})
-ax = sns.heatmap(ep_gene_mat_imp_pos, linewidths=.5, center=0, annot=ep_gene_mat_or_pos, cmap='RdBu', fmt='')
-ax.set_facecolor('#f7f7f7')
-ax.collections[0].colorbar.set_label('z score')
 
-
-# HLA PRS analysis
-# split the data to training set and test set by 6:4
-test_size = 0.4
-seed = 4
-hla_df_train = hla_df.sample(n=int(test_size * len(hla_df)), random_state=seed)
-hla_df_test = hla_df[~hla_df.finngen_id.isin(hla_df_train.finngen_id)]
-
-
+# for conditional analysis
 def filter_genotypes(dataset):
     conditions_to_add = []
     genotypes_to_check = genes
@@ -215,11 +181,57 @@ def filter_genotypes(dataset):
         most_sig_genotype = stat_df[stat_df.filters == stat_df.filters.max()].gene.tolist()[0]
         conditions_to_add.append(most_sig_genotype)
         print('len_remained:', len(stat_df), '; selected:', conditions_to_add)
-    results = create_stat_df([OUTCOME], conditions_to_add, hla_df_train)
+    # results = create_stat_df([OUTCOME], conditions_to_add, hla_df_train)
+    return conditions_to_add
+
+
+# HLA PRS analysis
+def hla_modeling(ep):
+    x = sm.add_constant(hla_df[hla_df_test + covariates])
+    y = hla_df_test[ep]
+    model = sm.Logit(y, x).fit(disp=0)
+    stat = model.summary2().tables[1]
+    or_025 = np.exp(stat.loc['prs', '[0.025'])
+    or_975 = np.exp(stat.loc['prs', '0.975]'])
+    pval = stat.loc['prs', 'P>|z|']
+    se = stat.loc['prs', 'Std.Err.']
+    coef = stat.loc['prs', 'Coef.']
+    return [ep, coef, se, pval, or_025, or_975]
+
+
+def model_loop(results, endpoints):
+    for endpoint in tqdm.tqdm(endpoints):
+        res = hla_modeling(endpoint)
+        if res:
+            results = results.append(pd.Series(res, index=results.columns), ignore_index=True)
     return results
 
 
-res_train = filter_genotypes(hla_df_train)
-res_all = filter_genotypes(hla_df)
+seed = 4
+
+# method 1: split the data to training set and test set by 6:4
+test_size = 0.4
+hla_df_train = hla_df.sample(n=int(test_size * len(hla_df)), random_state=seed)
+hla_df_test = hla_df[~hla_df.finngen_id.isin(hla_df_train.finngen_id)]
+# select genotypes
+genotypes_selected = filter_genotypes(hla_df_train)
+# calculate weights
+res_train = create_stat_df(eps_selected, genotypes_selected, hla_df_train)
+
+# method 2: divide the dataset into 5 folds and then do cv
+hla_df_shuffled = hla_df.sample(frac=1, random_state=seed)
+n_folds = np.array_split(hla_df_shuffled, 5)
+
+genotypes_selected = filter_genotypes(hla_df)
+res_df = create_stat_df(eps_selected, genotypes_selected, hla_df)
+for fold in n_folds:
+    hla_df_test = fold
+    hla_df_train = hla_df[~hla_df.finngen_id.isin(hla_df_test.finngen_id)]
+    res_train = create_stat_df(eps_selected, genotypes_selected, hla_df_train)
+    res_prs = pd.DataFrame()
 
 
+res_df_selected = res_df[~res_df.endpoint.isin(['T2D', 'GEST_DIABETES'])]
+plot_heatmap(res_df_selected)
+
+weight_dict = dict(zip(res.train.genotype))

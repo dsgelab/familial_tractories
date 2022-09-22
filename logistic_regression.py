@@ -101,3 +101,18 @@ plot_crossed_odds_ratio(res, ('all', 'all_sub'), OUTCOME)
 draw_grouped_bar_plot(res[res.note == 'all'], 'who', 'n_cases', title='All individuals')
 draw_grouped_bar_plot(res[res.note == 'all_sub'], 'who', 'n_cases', title='Individuals whose parents were born < 1962')
 
+
+def sex_difference(dataset, note, res_df, endpoints):
+    for endpoint in tqdm.tqdm(endpoints):
+        lr = conditional_models.ConditionalLogit(endog=dataset.outcome,
+                                                 exog=dataset[['fa_'+endpoint, 'mo_'+endpoint]],
+                                                 groups=dataset.subclass).fit(disp=0)
+        fa = [lr.bse[0], lr.pvalues[0], np.exp(lr.conf_int().iloc[0, 0]), np.exp(lr.conf_int().iloc[0, 1])]
+        res_df = res_df.append(pd.Series([endpoint, note, 'Father'] + fa, index=res_df.columns), ignore_index=True)
+        mo = [lr.bse[1], lr.pvalues[1], np.exp(lr.conf_int().iloc[1, 0]), np.exp(lr.conf_int().iloc[1, 1])]
+        res_df = res_df.append(pd.Series([endpoint, note, 'Mother'] + mo, index=res_df.columns), ignore_index=True)
+    return res_df
+
+res = pd.DataFrame(columns=["endpoint", "note", "who", "se", "pval", "or_025", "or_975"])
+res = model_loop(data[data.sex == 0], 'Son', res, eps_sig)
+res = model_loop(data[data.sex == 1], 'Daughter', res, eps_sig)
