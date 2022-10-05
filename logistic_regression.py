@@ -5,6 +5,7 @@ import tqdm
 import json
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 from statsmodels.discrete import conditional_models
 from basic_tools import who_dict
 from plot_tools import plot_odds_ratio, plot_crossed_odds_ratio, draw_grouped_bar_plot
@@ -22,7 +23,7 @@ for ep in eps:
     rename_dict[ep_col_fa] = 'fa_' + ep
     rename_dict[ep_col_pa] = 'pa_' + ep
 data = data.rename(columns=rename_dict)
-data = data[['sex', 'subclass', 'outcome']+list(rename_dict.values())]
+data = data[['ID', 'sex', 'subclass', 'outcome']+list(rename_dict.values())]
 
 # to_remove ??
 # ['E4_GRAVES_OPHT_STRICT', 'I9_RHEUFEV', 'L12_ALOPECAREATA', 'L12_DERMATHERP', 'L12_PEMPHIGOID', 'M13_MCTD']
@@ -116,3 +117,41 @@ def sex_difference(dataset, note, res_df, endpoints):
 res = pd.DataFrame(columns=["endpoint", "note", "who", "se", "pval", "or_025", "or_975"])
 res = model_loop(data[data.sex == 0], 'Son', res, eps_sig)
 res = model_loop(data[data.sex == 1], 'Daughter', res, eps_sig)
+
+# age of disease onset
+study_population = pd.read_csv('df.csv')
+data = data[data.outcome == 1].merge(study_population[['ID', 'ch_age0']], 'left', on='ID')
+
+MATCH_FACTORS = ['sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number', 'province']
+eps_sig = ['AUTOIMMUNE_HYPERTHYROIDISM','D3_ANAEMIA_B12_DEF','E4_HYTHY_AI_STRICT',
+           'K11_COELIAC','L12_DERMATHERP','M13_RHEUMA','T1D_STRICT']
+
+threshold = 0.001
+cols = ['Coef.', 'Std.Err.', 't', 'P>|t|', '[0.025', '0.975]']
+
+res_pa = pd.DataFrame(columns=cols)
+res_mofa = pd.DataFrame(columns=cols)
+res_mofa_boy = pd.DataFrame(columns=cols)
+res_mofa_girl = pd.DataFrame(columns=cols)
+
+for i in eps_sig:
+    model = sm.OLS(data.ch_age0, data[['pa_'+i]+MATCH_FACTORS]).fit(disp=0)
+    res_pa = res_pa.append(model.summary2().tables[1].iloc[0,:])
+
+    model = sm.OLS(data.ch_age0, data[['fa_'+i, 'mo_'+i]+MATCH_FACTORS]).fit(disp=0)
+    res_mofa = pd.concat([res_mofa, model.summary2().tables[1].iloc[0:2,:]], axis=0)
+
+    df = data[data.sex == 0]
+    model = sm.OLS(df.ch_age0, df[['fa_' + i, 'mo_' + i] + MATCH_FACTORS]).fit(disp=0)
+    res_mofa_boy = pd.concat([res_mofa_boy, model.summary2().tables[1].iloc[0:2, :]], axis=0)
+
+    df = data[data.sex == 1]
+    model = sm.OLS(df.ch_age0, df[['fa_' + i, 'mo_' + i] + MATCH_FACTORS]).fit(disp=0)
+    res_mofa_girl = pd.concat([res_mofa_girl, model.summary2().tables[1].iloc[0:2, :]], axis=0)
+
+
+res_pa['sig'] = np.select([(res_pa['P>|t|'] <= threshold), (res_pa['P>|t|'] > threshold)], ['y', 'n'])
+res_mofa['sig'] = np.select([(res_mofa['P>|t|'] <= threshold), (res_mofa['P>|t|'] > threshold)], ['y', 'n'])
+res_mofa_boy['sig'] = np.select([(res_mofa_boy['P>|t|'] <= threshold), (res_mofa_boy['P>|t|'] > threshold)], ['y', 'n'])
+res_mofa_girl['sig'] = np.select([(res_mofa_girl['P>|t|'] <= threshold), (res_mofa_girl['P>|t|'] > threshold)],
+                                     ['y', 'n'])

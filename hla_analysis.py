@@ -235,3 +235,15 @@ res_df_selected = res_df[~res_df.endpoint.isin(['T2D', 'GEST_DIABETES'])]
 plot_heatmap(res_df_selected)
 
 weight_dict = dict(zip(res.train.genotype))
+
+from numpy import mean
+from sklearn.datasets import make_classification
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import RepeatedStratifiedKFold
+from sklearn.tree import DecisionTreeClassifier
+
+
+ep_counts = hla_df[ep].value_counts()
+weights = {0: ep_counts[1]/ep_counts[0], 1: 1.0}
+model = DecisionTreeClassifier(class_weight=weights)
+# cross_val_score(model, X, y, scoring='roc_auc', cv=cv, n_jobs=-1)
