@@ -7,12 +7,19 @@ import statsmodels.api as sm
 from basic_tools import eps_selected, eps_dict
 import seaborn as sns
 from plot_tools import plot_odds_ratio
-from statsmodels.tools.sm_exceptions import PerfectSeparationError
-from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import RidgeClassifier
 warnings.filterwarnings('ignore')
+scaler = StandardScaler()
 
+SEED = 4
 OUTCOME = 'T1D_STRICT'
 eps = json.load(open('eps_' + OUTCOME + '.json', 'r'))
+covariates = ['PC'+str(i) for i in range(1, 11)] + ['sex', 'age']
+eps_sig = ['AUTOIMMUNE_HYPERTHYROIDISM',  'D3_ANAEMIA_B12_DEF', 'E4_HYTHY_AI_STRICT',
+           'K11_COELIAC', 'M13_RHEUMA', 'T1D_STRICT']
 
 # import imputed HLA data
 hla_data = pd.read_csv('R9_imputed_HLAs_v2.csv')
@@ -26,7 +33,7 @@ hla_df = hla_data[['A*01:01']]
 gene_sum_df = pd.DataFrame(columns=[0.0, 1.0, 2.0])
 for i in tqdm.tqdm(genes):
     genotype = hla_data[i].str.extract(':(.+),(.+),(.+)')
-    genotype['dose_str'] = hla_data[i].extract('(.+):')
+    genotype['dose_str'] = hla_data[i].str.extract('(.+):')
     genotype['dose_int'] = np.select([(genotype.dose_str == './.'), (genotype.dose_str == '0/0'),
                                       (genotype.dose_str == '0/1'), (genotype.dose_str == '1/1')],
                                      [-1.0, 0.0, 1.0, 2.0])
@@ -40,7 +47,7 @@ gene_sum_df['genotype'] = gene_sum_df.index
 gene_sum_df.index = range(len(gene_sum_df))
 gene_sum_df = gene_sum_df.rename(columns={0.0: '0.0', 1.0: '1.0', 2.0: '2.0'})
 # remove those genes without any alt allele: 187 -> 129
-genes = gene_sum_df[(~gene_sum_df[1.0].isna()) & (~gene_sum_df[2.0].isna())].genotype.tolist()
+genes = gene_sum_df[(~gene_sum_df['1.0'].isna()) & (~gene_sum_df['2.0'].isna())].genotype.tolist()
 hla_df = hla_df[genes]
 
 # import confounding cols
@@ -55,7 +62,7 @@ events = pd.read_csv('/finngen/library-red/finngen_R9/phenotype_1.0/data/finngen
                      sep='\t')
 for ep in tqdm.tqdm(eps):
     events_sub = events[events.ENDPOINT == ep]
-    hla_df[ep] = np.select([(hla_df.index.isin(events_sub.FINNGENID)), (~hla_df.index.isin(events_sub.FINNGENID))],
+    hla_df[ep] = np.select([(hla_df.finngen_id.isin(events_sub.FINNGENID)), (~hla_df.finngen_id.isin(events_sub.FINNGENID))],
                            [1, 0])
 
 ep_sum_df = pd.DataFrame(hla_df[eps].sum(), columns=['n_cases'])
@@ -66,66 +73,89 @@ ep_sum_df['n_cohort'] = [len(hla_df)] * (len(eps) - 1) + [len(hla_df[hla_df.sex 
 ep_sum_df = ep_sum_df[['n_cohort', 'n_cases', 'endpoint', 'sex']]
 
 # build a for-loop for logistic regression
-covariates = ['PC'+str(i) for i in range(1, 11)] + ['sex', 'age']
-key_cols = ['Coef.', 'Std.Err.', 'z', 'P>|z|', '[0.025', '0.975]', 'endpoint', 'n_cases', 'n_cohort']
+columns = ['ep1', 'ep2', 'coef', 'se', 'pval', 'beta_025', 'beta_975', 'r_squared_0', 'r_squared_1', 'r_squared_delta',
+           'n_ep1', 'n_ep2', 'n_both']
 
 
-def modeling(subset, gene_list):
-    # subset column order:
-    # 0-n_cohort-int,
-    # 1-n_cases-int,
-    # 2-outcome-str,
-    # 3-sex-int
-    x = hla_df[gene_list + covariates]
-    x = sm.add_constant(x)
-    y = hla_df[[subset[2]]]
-    if subset[3] > -1:
-        x = x[x.sex == subset[3]]
-        x = x.drop(columns=['sex'])
-        y = y[y.index.isin(x.index)]
-    try:
-        model = sm.Logit(y.astype(int), x).fit(disp=0)
-        stat = model.summary2().tables[1]
-        stat = stat[stat.index.isin(gene_list)]
-    except PerfectSeparationError:
-        # When event per variable is too low,
-        # the logistic model is under the risk of complete separation or quasi⁃complete separation.
-        # https://m.medsci.cn/article/show_article.do?id=606319405019
-        pd.DataFrame(dict(zip(key_cols[:6], [2.] * 6)), index=gene_list)
-    except np.linalg.LinAlgError:
-        # singular matrix
-        pd.DataFrame(dict(zip(key_cols[:6], [3.] * 6)), index=gene_list)
-    except ValueError:
-        # ValueError: Pandas data cast to numpy dtype of object. Check input data with np.asarray(data).
-        pd.DataFrame(dict(zip(key_cols[:6], [4.] * 6)), index=gene_list)
-    except Exception:
-        pd.DataFrame(dict(zip(key_cols[:6], [5.] * 6)), index=gene_list)
-    stat['endpoint'] = subset[2]
-    stat['n_cases'] = subset[1]
-    stat['n_cohort'] = subset[0]
-    return stat
+def regression(exposure, outcome, hla_dataset):
+    y = hla_dataset[outcome]
+    y.index = range(len(y))
+
+    x0 = sm.add_constant(hla_dataset[covariates])
+    model = sm.Logit(y, x0).fit(disp=0)
+    r_squared_0 = float(model.summary2().tables[0].iloc[0, 3])
+
+    x1 = sm.add_constant(hla_dataset[[exposure] + covariates])
+    model = sm.Logit(y, x1).fit(disp=0)
+    r_squared_1 = float(model.summary2().tables[0].iloc[0, 3])
+    r_squared_delta = r_squared_1 - r_squared_0
+
+    res = model.summary2().tables[1]
+    beta_025 = res.loc[exposure, '[0.025']
+    beta_975 = res.loc[exposure, '0.975]']
+    pval = res.loc[exposure, 'P>|z|']
+    se = res.loc[exposure, 'Std.Err.']
+    coef = res.loc[exposure, 'Coef.']
+    return [outcome, coef, se, pval, beta_025, beta_975, r_squared_0, r_squared_1, r_squared_delta]
 
 
-def create_stat_df(ep_list, gene_list, single=True):
-    original_results = pd.DataFrame(columns=key_cols)
-    ep_sum = ep_sum_df[ep_sum_df.endpoint.isin(ep_list)]
-    for ep_row in tqdm.tqdm(ep_sum.to_numpy()):
-        if single:
-            for genotype in gene_list:
-                original_results = original_results.append(modeling(ep_row, [genotype]))
-        else:
-            original_results = original_results.append(modeling(ep_row, gene_list))
-    original_results['genotype'] = original_results.index
-    processed_results = original_results[['genotype']+key_cols[-3:]+key_cols[:4]]#.drop(columns='z')
-    rename_dict = {key_cols[0]: 'coef', key_cols[1]: 'se', key_cols[3]: 'pval'}
-    processed_results = processed_results.rename(columns=rename_dict)
-    processed_results['or_025'] = np.exp(original_results[key_cols[4]])
-    processed_results['or_975'] = np.exp(original_results[key_cols[5]])
-    processed_results['or_500'] = np.exp(original_results[key_cols[0]])
-    processed_results['p_sig'] = np.select([(processed_results.pval > 0.05/len(gene_list)),
-                                            (processed_results.pval <= 0.05/len(gene_list))], [0, 1])
-    processed_results = processed_results.merge(gene_sum_df, 'left', on='genotype')
-    return processed_results
+def model_loop(endpoint, results, outcome_list, exposure, hla_dataset):
+    for outcome in outcome_list:
+        n_ep1 = len(hla_dataset[hla_dataset[endpoint] == 1])
+        n_ep2 = len(hla_dataset[hla_dataset[outcome] == 1])
+        n_both = len(hla_dataset[(hla_dataset[endpoint] == 1) & (hla_dataset[outcome] == 1)])
+    res = regression(outcome, exposure, hla_dataset)
+    if res:
+        results = results.append(pd.Series([endpoint] + res + [n_ep1, n_ep2, n_both],
+                                           index=results.columns), ignore_index=True)
+    return results
+
+
+# plot beta (95% CI)
+def plot_association1(df, ylabel, color, hline, outcome=OUTCOME, plt_len=15):
+    """
+    :param df - a DataFrame of summary statistics
+    :param outcome - a string which indicates the outcome disease name
+    :return - a beta plot of all the diseases listed in df
+    """
+    df = df.sort_values(by='ep1')
+    df.index = range(len(df))
+    plt.figure(figsize=(plt_len, 5))
+    plt.box(False)
+    plt.grid()
+    for i, row in df.iterrows():
+        alpha = 1 if row.pval <= 0.05 / len(df) and row.r_squared_delta >= 0.01 else 0.12
+        plt.plot((i, i), (row.beta_025, row.beta_975), 's', color=color, alpha=alpha)
+        plt.plot(i, (row.beta_025 + row.beta_975) / 2, 's', color=color, alpha=alpha)
+    plt.xticks(range(len(df)), [eps_dict[i] for i in df.ep1.tolist()], rotation=90)
+    plt.ylabel(ylabel, size=12)
+    plt.ylabel(y=hline, color='black', linestyle='--', linewidth=1)
+    plt.grid()
+    plt.show()
+
+
+def plot_association2(df, sig_eps, ylabel, color, hline, outcome=OUTCOME, plt_len=15):
+    """
+    :param df - a DataFrame of summary statistics
+    :param outcome - a string which indicates the outcome disease name
+    :return - a beta plot of all the diseases listed in df
+    """
+    df = df.sort_values(by='ep1')
+    df.index = range(len(df))
+    plt.figure(figsize=(plt_len, 5))
+    plt.box(False)
+    plt.grid()
+    for i, row in df.iterrows():
+        alpha = 1 if row.pval <= 0.05 / len(df) else 0.12
+        plt.plot((i, i), (row.beta_025, row.beta_975), 's', color=color, alpha=alpha)
+        plt.plot(i, (row.beta_025 + row.beta_975) / 2, 's', color=color, alpha=alpha)
+        if row.ep1 in sig_eps:
+            plt.annotate('$', (i+.1, row.beta_975+.01), size=12, color='green')
+    plt.xticks(range(len(df)), [eps_dict[i] for i in df.ep1.tolist()], rotation=90)
+    plt.ylabel(ylabel, size=12)
+    plt.ylabel(y=hline, color='black', linestyle='--', linewidth=1)
+    plt.grid()
+    plt.show()
 
 
 # create a heatmap for the results
@@ -146,104 +176,64 @@ def plot_heatmap(stat_df):
     ax.collections[0].colorbar.set_label('z score')
 
 
-# find out the most significant hla genotypes that associated with T1D
-# Method One:
-res_df_1 = create_stat_df([OUTCOME], genes)
-print(res_df_1[res_df_1.pval == res_df_1.pval.min()])
-# Four genes are strongly associated with T1D (pval = 0.0): DQA1*03:01 DRB1*04:01 DQB1*03:02 DRB4*01:03
-# 87 genotypes are significant
-_ = plot_odds_ratio(res_df_1[res_df_1.p_sig == 1])
-# Method Two: use conditional analysis
-# in each loop, add the most significant hla genotype as a covariate
-# genotypes are significant
+# shuffle and split
+hla_df_shuffled = hla_df.sample(frac=1, random_state=SEED)
+hla_df_shuffled.index = range(len(hla_df_shuffled))
+# set for 10-fold CV
+n_folds = np.array_split(hla_df_shuffled, 10)
 
-
+method = '10fold_weighted_ridge'
+res_prs = pd.DataFrame(columns=columns)
 # obtain stats for selected endpoints and save the results
-res_df = create_stat_df(eps, genes)
-res_df.to_csv('hla_res.csv', index=None)
+for endpoint in tqdm.tqdm(eps_selected):
+    test_df_all = pd.DataFrame(columns=['finngen_id', 'prs_'+endpoint])
+    ep_counts = hla_df[endpoint].value_counts()
+    model_weights = {0: ep_counts[1]/ep_counts[0], 1: 1.}
 
-# plot the associations between all the endpoints and each of the 4 most significant genes for T1D
-for i in ['DQA1*03:01', 'DRB1*04:01', 'DQB1*03:02', 'DRB4*01:03']:
-    _ = plot_odds_ratio(res_df[res_df.genotype == i])
+    for fold in n_folds:
+        test_df = fold
+        test_df.index = range(len(test_df))
+        train_df = hla_df_shuffled[~hla_df_shuffled.finngen_id.isin(test_df.finngen_id)]
+        train_df.index = range(len(train_df))
 
+        model = RidgeClassifier(class_weight=model_weights, random_state=SEED)
+        model.fit(train_df[genes], train_df[endpoint])
+        prs_weights = dict(zip(genes, model.coef_[0]))
+        test_df['prs_'+endpoint] = 0
+        test_df.index = range(len(test_df))
+        for ep, weight in prs_weights.items():
+            test_df['prs_'+endpoint] += test_df[ep]*weight
+        test_df['prs_'+endpoint] = scaler.fit_transform(np.array(test_df['prs_'+endpoint]).reshape(-1, 1))
+        test_df_all = pd.concat([test_df_all, test_df[['finngen_id', 'prs_'+endpoint]]], axis=0)
 
-# for conditional analysis
-def filter_genotypes(dataset):
-    conditions_to_add = []
-    genotypes_to_check = genes
-    while len(genotypes_to_check) > 0:
-        stat_df = create_stat_df([OUTCOME], genotypes_to_check, dataset, conditions_to_add)
-        stat_df = stat_df[stat_df.pval < 0.05/len(genes)]
-        if len(stat_df) == 0:
-            break
-        genotypes_to_check = stat_df.gene.tolist()
-        stat_df['filters'] = stat_df.coef/stat_df.se
-        most_sig_genotype = stat_df[stat_df.filters == stat_df.filters.max()].gene.tolist()[0]
-        conditions_to_add.append(most_sig_genotype)
-        print('len_remained:', len(stat_df), '; selected:', conditions_to_add)
-    # results = create_stat_df([OUTCOME], conditions_to_add, hla_df_train)
-    return conditions_to_add
+    hla_df = hla_df.merge(test_df_all, 'inner', on='finngen_id')
+    res_prs = model_loop(endpoint, res_prs, [OUTCOME], 'prs_'+endpoint, hla_df)
+    res_prs = model_loop(endpoint, res_prs, [endpoint], 'prs_' + endpoint, hla_df)
 
+res_prs.to_csv('hla_prs_res.csv', index=None)
 
-# HLA PRS analysis
-def hla_modeling(ep):
-    x = sm.add_constant(hla_df[hla_df_test + covariates])
-    y = hla_df_test[ep]
-    model = sm.Logit(y, x).fit(disp=0)
-    stat = model.summary2().tables[1]
-    or_025 = np.exp(stat.loc['prs', '[0.025'])
-    or_975 = np.exp(stat.loc['prs', '0.975]'])
-    pval = stat.loc['prs', 'P>|z|']
-    se = stat.loc['prs', 'Std.Err.']
-    coef = stat.loc['prs', 'Coef.']
-    return [ep, coef, se, pval, or_025, or_975]
+res_step1 = res_prs[res_prs.index.isin([i for i in range(len(eps_selected)*2) if i % 2 == 1])]
+res_step1 = res_step1[res_step1.r_squared_delta >= 0.01]
+res_step2 = res_prs[res_prs.index.isin([i for i in range(len(eps_selected)*2) if i % 2 == 0])]
+res_step2 = res_step2[res_step2.ep1.isin(res_step1.ep1)]
+# to make sure r_squared_delta in step1 are approximately equal or larger than the those in step2
+print(res_step1.r_squared_delta - res_step2.r_squared_delta.values)
 
 
-def model_loop(results, endpoints):
-    for endpoint in tqdm.tqdm(endpoints):
-        res = hla_modeling(endpoint)
-        if res:
-            results = results.append(pd.Series(res, index=results.columns), ignore_index=True)
-    return results
+# plot the associations between each pair of endpoint and PRS
+plot_association1(res_step1, 'beta (AD ~ HLA-PRS for AD)', '#285085', 0)
+plot_association2(res_step2, eps_sig, 'beta (T1D ~ HLA-PRS for AD)', '#285085', 0, plt_len=7)
 
-
-seed = 4
-
-# method 1: split the data to training set and test set by 6:4
-test_size = 0.4
-hla_df_train = hla_df.sample(n=int(test_size * len(hla_df)), random_state=seed)
-hla_df_test = hla_df[~hla_df.finngen_id.isin(hla_df_train.finngen_id)]
-# select genotypes
-genotypes_selected = filter_genotypes(hla_df_train)
-# calculate weights
-res_train = create_stat_df(eps_selected, genotypes_selected, hla_df_train)
-
-# method 2: divide the dataset into 5 folds and then do cv
-hla_df_shuffled = hla_df.sample(frac=1, random_state=seed)
-n_folds = np.array_split(hla_df_shuffled, 5)
-
-genotypes_selected = filter_genotypes(hla_df)
-res_df = create_stat_df(eps_selected, genotypes_selected, hla_df)
-for fold in n_folds:
-    hla_df_test = fold
-    hla_df_train = hla_df[~hla_df.finngen_id.isin(hla_df_test.finngen_id)]
-    res_train = create_stat_df(eps_selected, genotypes_selected, hla_df_train)
-    res_prs = pd.DataFrame()
-
-
-res_df_selected = res_df[~res_df.endpoint.isin(['T2D', 'GEST_DIABETES'])]
-plot_heatmap(res_df_selected)
-
-weight_dict = dict(zip(res.train.genotype))
-
-from numpy import mean
-from sklearn.datasets import make_classification
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import RepeatedStratifiedKFold
-from sklearn.tree import DecisionTreeClassifier
-
-
-ep_counts = hla_df[ep].value_counts()
-weights = {0: ep_counts[1]/ep_counts[0], 1: 1.0}
-model = DecisionTreeClassifier(class_weight=weights)
-# cross_val_score(model, X, y, scoring='roc_auc', cv=cv, n_jobs=-1)
+# plot number of cases
+plt.figure(figsize=(7, 1))
+plt.box(False)
+plt.grid()
+plt.bar(res_step2.ep1.tolist(), res_step2.n_ep1.tolist(), color='#285085', width=0.5)
+plt.xticks(range(len(res_step2.ep1)), [eps_dict[i] for i in res_step2.ep1.tolist()], rotation=90)
+plt.ylabel('# cases', size=12)
+plt.yscale('log')
+plt.yticks([100, 1000, 10000])
+ax = plt.gca()
+ax.get_yaxis().set_major_formatter(ScalarFormatter)
+plt.grid()
+plt.show()
