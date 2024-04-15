@@ -1,0 +1,133 @@
+---
+title: "meta-analysis"
+author: "Feiyi Wang"
+date: "2023-01-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load basic setup
+setwd("~/Documents/Materials/familial_trajectory/finngen_sandbox")
+library(meta)
+library(dplyr)
+#data <- read.csv("/home/ivm/Desktop/weights_n_folds.csv")
+data <- read.csv("stats_n_folds_m2.csv")
+```
+
+```{r}
+OUTCOME = 'T1D_STRICT'
+SEED = 4
+FOLD_NUM = 10
+eps_sig = c('E4_GRAVES_STRICT','D3_ANAEMIA_B12_DEF','E4_HYTHY_AI_STRICT',
+           'K11_COELIAC','M13_SJOGREN','M13_RHEUMA','T1D_STRICT')
+eps_df <- matrix(c('D3_AIHA_OTHER', 'Autoimmune hemolytic anemia',
+                   'D3_ALLERGPURPURA', 'Allergic purpura',
+                   'D3_ANAEMIA_B12_DEF','Vitamin B12 deficiency anaemia',
+                   'D3_ITP', 'Idiopathic thrombocytopenic purpura',
+                   'D3_SARCOIDOSIS', 'Sarcoidosis',
+                   'CHIRBIL_PRIM', 'Primary biliary cholangitis',
+                   'K11_COELIAC', 'Coeliac disease',
+                   'K11_IBD', 'Inflammatory bowel disease',
+                   'N14_IGA_NEPHROPATHY', 'IgA nephropathy',
+                   'M13_ANKYLOSPON', 'Ankylosing spondylitis',
+                   'M13_MCTD', 'Mixed connective tissue disease',
+                   'M13_RHEUMA', 'Rheumatoid arthritis',
+                   'M13_SJOGREN', 'Sjögren syndrome',
+                   'M13_SYSTSLCE', 'Systemic sclerosis',
+                   'M13_WEGENER', 'Wegener granulomatosis',
+                   'SLE_FG', 'Systemic lupus erythematosus',
+                   'G6_GUILBAR', 'Guillain-Barre syndrome',
+                   'G6_MS', 'Multiple Sclerosis',
+                   'G6_MYASTHENIA', 
+                   'Myasthenia gravis',
+                   'L12_ALOPECAREATA', 'Alopecia areata',
+                   'L12_PSORIASIS', 'Psoriasis',
+                   'L12_VITILIGO', 'Vitiligo',
+                   'E4_ADDISON', 'Adrenocortical insufficiency',
+                   'E4_GRAVES_STRICT', 'Autoimmune hyperthyroidism',
+                   'E4_HYTHY_AI_STRICT', 'Autoimmune hypothyroidism',
+                   'T1D_STRICT', 'Type 1 diabetes'), byrow=T, ncol=2)
+colnames(eps_df) <- c("ep_id","ep_name")
+```
+
+```{r}
+endpoint = "K11_COELIAC"
+subset1 = data %>% filter((ep1 == endpoint) & (ep2 == endpoint))
+subset2 = data %>% filter((ep1 == endpoint) & (ep2 == OUTCOME))
+if (endpoint == OUTCOME) {
+  subset1 = unique(subset1)
+  subset2 = subset1
+}
+meta_res1 = metagen( # "generic inverse variance weighting"
+  TE = subset1[,3], #logOR
+  seTE = subset1[,4], #SE of logOR
+  studlab = paste("Target set", 1:10))
+r2_weights = 0.01*weights(meta_res1)$p.random
+meta_r2 = r2_weights%*%subset1$r_squared_delta
+forest.meta(meta_res1, random = T)
+```
+
+```{r}
+meta_res2 = metagen( # "generic inverse variance weighting"
+  TE = subset2[,3], #logOR
+  seTE = subset2[,4], #SE of logOR
+  studlab = paste("Target set", 1:10))
+forest.meta(meta_res2, random = T)
+```
+
+
+```{r}
+endpoint_list = c('D3_AIHA_OTHER', 'D3_ALLERGPURPURA', 'D3_ANAEMIA_B12_DEF', 'D3_ITP', 'D3_SARCOIDOSIS', 'CHIRBIL_PRIM', 'K11_COELIAC', 'K11_IBD', 'N14_IGA_NEPHROPATHY', 'M13_ANKYLOSPON', 'M13_MCTD', 'M13_RHEUMA', 'M13_SJOGREN', 'M13_SYSTSLCE', 'M13_WEGENER', 'SLE_FG', 'G6_GUILBAR', 'G6_MS', 'G6_MYASTHENIA', 'L12_ALOPECAREATA', 'L12_PSORIASIS', 'L12_VITILIGO', 'E4_ADDISON', 'E4_GRAVES_STRICT', 'E4_HYTHY_AI_STRICT', 'T1D_STRICT')
+RES = NULL
+for (endpoint in endpoint_list) {
+  subset1 = data %>% filter((ep1 == endpoint) & (ep2 == endpoint))
+  subset2 = data %>% filter((ep1 == endpoint) & (ep2 == OUTCOME))
+  if (endpoint == OUTCOME) {
+    subset1 = unique(subset1)
+    subset2 = subset1
+  }
+  meta_res1 = metagen( # "generic inverse variance weighting"
+    TE = subset1[,3], #logOR
+    seTE = subset1[,4], #SE of logOR
+    studlab = paste("Target set", 1:10))
+  r2_weights1 = 0.01*weights(meta_res1)$p.random
+  meta_r21 = r2_weights1%*%subset1$r_squared_delta
+  
+  meta_res2 = metagen( # "generic inverse variance weighting"
+    TE = subset2[,3], #logOR
+    seTE = subset2[,4], #SE of logOR
+    studlab = paste("Target set", 1:10))
+  r2_weights2 = 0.01*weights(meta_res2)$p.random
+  meta_r22 = r2_weights2%*%subset2$r_squared_delta
+  
+  b1 = meta_res1$TE.random
+  b_lower1 = meta_res1$lower.random
+  b_upper1 = meta_res1$upper.random
+  i21 = meta_res1$I2
+  i2_lower1 = meta_res1$lower.I2
+  i2_upper1 = meta_res1$upper.I2
+  
+  b2 = meta_res2$TE.random
+  b_lower2 = meta_res2$lower.random
+  b_upper2 = meta_res2$upper.random
+  i22 = meta_res2$I2
+  i2_lower2 = meta_res2$lower.I2
+  i2_upper2 = meta_res2$upper.I2
+  # add a new row to the res df
+  RES <- rbind(RES,c(endpoint,
+                     b1,b_lower1,b_upper1,i21,i2_lower1,i2_upper1,meta_r21[1,1],
+                     b2,b_lower2,b_upper2,i22,i2_lower2,i2_upper2,meta_r22[1,1]
+                     ))
+}
+RESS <- data.frame(RES)
+colnames(RESS) <- c('endpoint','b_1','b_lower_1','b_upper_1',
+                    'i2_1','i2_lower_1','i2_upper_1','r2_1',
+                    'b_2','b_lower_2','b_upper_2',
+                    'i2_2','i2_lower_2','i2_upper_2','r2_2')
+write.csv(RESS,file="meta_res_m2.csv", row.names = FALSE)
+```
+
