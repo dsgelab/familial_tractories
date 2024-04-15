@@ -14,7 +14,7 @@ from stat_tools import get_cohend, sum_cases
 
 # define matching ratio and matching factors
 SEED = 4
-OUTCOME = 'T1D_STRICT' #'M13_RHEUMA'
+OUTCOME = 'T1D_STRICT'  # 'M13_RHEUMA'
 MATCH_NUM = 3
 MATCH_FACTORS = ['sex', 'ch_year_range', 'fa_year_range', 'mo_year_range', 'sib_number', 'province']
 ORIGEN_FACTORS = ['sex', 'ch_year', 'fa_year', 'mo_year', 'number_of_sib', 'province']
@@ -30,9 +30,8 @@ def case_control_matching(dataset, outcome, matching_factors, matching_number, s
     :return: a DataFrame of cases; a DataFrame of controls
     """
     # split the data into cases and cohort for controls
-    ep_index = str(eps.index(outcome))
-    cases = dataset[~dataset['ch_age'+ep_index].isna()]  # 15102
-    control_for_match = dataset[dataset['ch_age'+ep_index].isna()]
+    cases = dataset[dataset[outcome] == 1.0]  # 15102
+    control_for_match = dataset[dataset[outcome] == 0.0]
     print('To begin with, we split the study population into', len(cases), 'potential cases and',
           len(control_for_match), 'potential controls.')
 
@@ -65,7 +64,7 @@ def case_control_matching(dataset, outcome, matching_factors, matching_number, s
             else:
                 potential_control = potential_control.sample(n=matching_number * len(i['id_list']), random_state=seed)
                 index_num = match_permutation_keep.index(i)
-                for each in potential_control.ID.tolist()+i['id_list']:
+                for each in potential_control.ID.tolist() + i['id_list']:
                     matched_ids[each] = index_num
         except:
             match_failed.append(i)
@@ -85,48 +84,28 @@ def case_control_matching(dataset, outcome, matching_factors, matching_number, s
 
 
 def test_match_quality(dataset, outcome):
-    ep_index = str(eps.index(outcome))
     for i in ORIGEN_FACTORS:
-        print(i+': ', get_cohend(dataset[dataset['ch_ep'+ep_index] == 1][i],
-                                 dataset[dataset['ch_ep'+ep_index] == 0][i]))
+        print(i + ': ', get_cohend(dataset[dataset[outcome] == 1][i],
+                                   dataset[dataset[outcome] == 0][i]))
     print('---------------------------------------')
     for i in ['ses', 'job', 'edulevel', 'edufield', 'number_of_children', 'in_social_assistance_registries',
               'in_vaccination_registry', 'in_infect_dis_registry', 'in_malformations_registry',
               'in_cancer_registry', 'ever_married', 'lang']:
         try:
-            print(i + ': ', get_cohend(dataset[dataset['ch_ep' + ep_index] == 1][i],
-                                       dataset[dataset['ch_ep' + ep_index] == 0][i]))
+            print(i + ': ', get_cohend(dataset[dataset[outcome] == 1][i],
+                                       dataset[dataset[outcome] == 0][i]))
         except ValueError:
             print(i)
 
 
-def remove_unnecessary_columns(dataset, outcome, threshold=50):
+def remove_columns_with_low_cases(dataset, outcome, threshold=50):
     n_cases, ep_remove = sum_cases(dataset, 'parent', threshold)
     remained_eps = [i for i in eps if i not in ep_remove]
-    dataset = dataset.drop(columns=['fa_ep' + str(eps.index(i)) for i in ep_remove] +
-                                   ['mo_ep' + str(eps.index(i)) for i in ep_remove] +
-                                   ['pa_ep' + str(eps.index(i)) for i in ep_remove] +
-                                   ['ch_ep' + str(eps.index(i)) for i in eps if i != outcome] +
-                                   ['fa_age' + str(eps.index(i)) for i in ep_remove] +
-                                   ['mo_age' + str(eps.index(i)) for i in ep_remove] +
-                                   ['ch_age' + str(eps.index(i)) for i in eps if i != outcome])
-    col_dict = {'ch_ep' + str(eps.index(outcome)): 'outcome', 'ch_age' + str(eps.index(outcome)): 'outcome_age'}
-    for i in remained_eps:
-        ep_index_old = str(eps.index(i))
-        ep_index_new = str(remained_eps.index(i))
-        if 'mo_ep' + ep_index_old in dataset.columns:
-            col_dict['mo_ep' + ep_index_old] = 'mo_ep' + ep_index_new
-        if 'mo_age' + ep_index_old in dataset.columns:
-            col_dict['mo_age' + ep_index_old] = 'mo_age' + ep_index_new
-        if 'fa_ep' + ep_index_old in dataset.columns:
-            col_dict['fa_ep' + ep_index_old] = 'fa_ep' + ep_index_new
-        if 'fa_age' + ep_index_old in dataset.columns:
-            col_dict['fa_age' + ep_index_old] = 'fa_age' + ep_index_new
-        if 'pa_ep' + ep_index_old in dataset.columns:
-            col_dict['pa_ep' + ep_index_old] = 'pa_ep' + ep_index_new
-    dataset = dataset.rename(columns=col_dict)
+    dataset = dataset.drop(columns=['fa_' + i for i in ep_remove] +
+                                   ['mo_' + i for i in ep_remove] +
+                                   ['pa_' + i for i in ep_remove] +
+                                   [i for i in eps if i != outcome])
     return dataset, remained_eps
-
 
 print('Start to load data...')
 # load data
@@ -142,14 +121,14 @@ test_match_quality(data, OUTCOME)
 
 
 print('Start to add parent columns and remove unnecessary columns...')
+data = data.fillna(0.0)
+data[OUTCOME] = data[OUTCOME].astype(int)
 for ep in tqdm.tqdm(eps):
-    ep_index = eps.index(ep)
-    ep_col_mo = 'mo_ep'+str(ep_index)
-    ep_col_fa = 'fa_ep'+str(ep_index)
-    ep_col_pa = 'pa_ep'+str(ep_index)
-    data[ep_col_pa] = data[ep_col_mo] | data[ep_col_fa]
+    data['mo_'+ep] = data['mo_'+ep].astype(int)
+    data['fa_'+ep] = data['fa_'+ep].astype(int)
+    data['pa_'+ep] = data['mo_'+ep] | data['fa_'+ep]
 # keep only diseases whose parents' n_cases >= 50
-data, eps_remain = remove_unnecessary_columns(data, OUTCOME)
+data, eps_remain = remove_columns_with_low_cases(data, OUTCOME)
 
 
 print('Start to add useful columns and then save the data...')

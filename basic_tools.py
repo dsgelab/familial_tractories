@@ -13,7 +13,8 @@ eps = ['T1D_STRICT', 'M13_RHEUMA', 'M13_RELAPSPOLYCHONDR', 'M13_SJOGREN', 'M13_S
        'D3_ANAEMIA_B12_DEF', 'K11_COELIAC', 'K11_IBD', 'G6_MYASTHENIA', 'G6_OTHDEMYEL', 'G6_MYOMUSCINOTH',
        'G6_GUILBAR', 'H7_IRIDOCYC_ANTER', 'CHIRBIL_PRIM', 'L12_PSORIASIS', 'L12_VITILIGO', 'L12_ALOPECAREATA',
        'L12_PEMPHIGOID', 'L12_DERMATHERP', 'N14_HENOCHSCHONLEIN_NEPHRITIS', 'N14_IGA_NEPHROPATHY',
-       'T2D', 'GEST_DIABETES', 'K11_CROHN', 'J10_ASTHMACOPDKELA']
+       'T2D', 'GEST_DIABETES', 'K11_CROHN', 'J10_ASTHMACOPDKELA', 'K11_UC_STRICT2', 'E4_GRAVES_STRICT',
+       'K11_CD_STRICT2', 'K11_ULCER']
 
 # convert eps to interpretable names
 eps_dict = {'T1D_STRICT': 'Type 1 diabetes',
@@ -31,7 +32,8 @@ eps_dict = {'T1D_STRICT': 'Type 1 diabetes',
             'E4_HYTHY_AI_STRICT': 'Autoimmune hypothyroidism',
             'M13_DERMATOPOLY': 'Dermatopolymyositis',
             'E4_GRAVES_OPHT_STRICT': 'Graves opthalmopathy',
-            'L12_PEMPHIGOID': 'Pemphigoid',
+            'L12_PEMPHIGOID': 'Bullous pemphigoid',
+            'L12_PEMPHIGOID_BULL': 'Bullous pemphigoid',
             'I9_RHEUFEV': 'Rheumatic fever incl heart disease',
             'E4_ADDISON': 'Adrenocortical insufficiency',
             'D3_AIHA_OTHER': 'Autoimmune haemolytic anaemias',
@@ -53,7 +55,11 @@ eps_dict = {'T1D_STRICT': 'Type 1 diabetes',
             'GEST_DIABETES': 'Gestational diabetes',
             'K11_CROHN': 'Crohn disease',
             'J10_ASTHMA': 'Asthma',
-            'J10_ASTHMACOPDKELA': 'Asthma'}
+            'J10_ASTHMACOPDKELA': 'Asthma',
+            'K11_CD_STRICT2': 'Crohn disease',
+            'K11_UC_STRICT2': 'Ulcerative colitis',
+            'K11_ULCER': 'Ulcerative colitis',
+            'E4_GRAVES_STRICT': 'Autoimmune hyperthyroidism'}
 
 eps_selected = ['AUTOIMMUNE_HYPERTHYROIDISM', 'CHIRBIL_PRIM', 'D3_AIHA_OTHER', 'D3_ALLERGPURPURA', 'D3_ANAEMIA_B12_DEF',
                 'D3_ITP', 'E4_ADDISON', 'E4_HYTHY_AI_STRICT', 'E4_THYROIDITAUTOIM', 'G6_DISSOTH', 'G6_GUILBAR', 'G6_MS',
@@ -66,8 +72,8 @@ eps_selected = ['AUTOIMMUNE_HYPERTHYROIDISM', 'CHIRBIL_PRIM', 'D3_AIHA_OTHER', '
 def load_data(event_path, info_path, geo_path, pedigree_path):
     logging.info('Data loading ...')
     # Get first events
-    df_events = pd.read_csv(event_path)
-    df_events = df_events.rename(columns={'FINNGENID': 'ID'})
+    df_events = pd.read_csv(event_path, sep='\t', usecols=['FINREGISTRYID']+eps)
+    df_events = df_events.rename(columns={'FINREGISTRYID': 'ID'})
     # Get demographic information
     df_info = pd.read_csv(info_path)
     df_info['ch_year'] = df_info['date_of_birth'].str.split('-').str[0].astype(float)
