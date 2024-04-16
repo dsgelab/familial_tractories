@@ -1,0 +1,149 @@
+---
+title: "pcor_20231214"
+author: "Feiyi Wang"
+date: "2023-12-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+setwd("~/Desktop/t1d")
+library(ppcor)
+date = "20240212"#"20231211"
+OUTCOME = 'T1D_STRICT'
+```
+
+HLA PRS
+
+```{r}
+endpoint_list = c('D3_AIHA_OTHER', 'D3_ALLERGPURPURA', 'D3_ANAEMIA_B12_DEF', 'D3_ITP', 
+                  'D3_SARCOIDOSIS','CHIRBIL_PRIM', 'K11_COELIAC', 'K11_IBD',
+                  'N14_IGA_NEPHROPATHY', 'M13_ANKYLOSPON','M13_MCTD', 'M13_RHEUMA',
+                  'M13_SJOGREN','M13_SYSTSLCE', 'M13_WEGENER', 'SLE_FG', 'G6_GUILBAR',
+                  'G6_MS','G6_MYASTHENIA', 'L12_ALOPECAREATA', 'L12_PSORIASIS',
+                  'L12_VITILIGO', 'E4_ADDISON', 'E4_GRAVES_STRICT', 'E4_HYTHY_AI_STRICT',
+                  'T1D_STRICT')
+```
+
+```{r}
+data <- read.csv(paste0("/home/ivm/Desktop/t1d/hla_data_",date,".csv"))
+```
+
+```{r}
+RES = NULL
+for (endpoint in endpoint_list) {
+  pos_out = 13+match(endpoint,endpoint_list)
+  pos_t1d = 13+match('T1D_STRICT',endpoint_list)
+  pos_prs = pos_out + 26
+  df1 = data[, c(1:13, pos_prs, pos_out)]
+  df2 = data[, c(1:13, pos_prs, pos_t1d)]
+  suppressWarnings({
+    res1 = pcor(df1)
+    res2 = pcor(df2)
+  })
+  pcor1 = as.numeric(res1$estimate[14,15])
+  pval1 = as.numeric(res1$p.value[14,15])
+  stat1 = as.numeric(res1$statistic[14,15])
+  pcor2 = as.numeric(res2$estimate[14,15])
+  pval2 = as.numeric(res2$p.value[14,15])
+  stat2 = as.numeric(res2$statistic[14,15])
+  RES <- rbind(RES,c(endpoint,pcor1,pval1,stat1,pcor2,pval2,stat2))
+}
+RESS <- data.frame(RES)
+colnames(RESS) <- c('endpoint','pcor1','pval1','stat1','pcor2','pval2','stat2')
+```
+
+```{r}
+write.csv(RESS,file=paste0("/home/ivm/Desktop/t1d/res_pcor_",date,".csv"), row.names = FALSE)
+```
+
+Non-HLA PRS
+
+```{R}
+endpoint_list = c('D3_ANAEMIA_B12_DEF','D3_SARCOIDOSIS', 'CHIRBIL_PRIM', 'K11_COELIAC', 'K11_IBD', 'M13_ANKYLOSPON',  'M13_RHEUMA', 'M13_SJOGREN', 'SLE_FG', 'G6_MS', 'G6_MYASTHENIA', 'L12_ALOPECAREATA', 'L12_PSORIASIS', 'L12_VITILIGO', 'N14_IGA_NEPHROPATHY', 'E4_GRAVES_STRICT', 'E4_HYTHY_AI_STRICT', 'T1D_STRICT')
+```
+
+```{r}
+#date = "20231211" #"20231113" #"20230929"
+data <- read.csv(paste0("/home/ivm/Desktop/t1d/non_df_",date,".csv"))
+```
+
+```{r}
+RES = NULL
+for (endpoint in endpoint_list) {
+  pos_out = 14+match(endpoint,endpoint_list)
+  pos_t1d = 14+match('T1D_STRICT',endpoint_list)
+  # pos_t1d = 14+match('T1D_EARLY',endpoint_list)
+  pos_prs = 14+length(endpoint_list)+match(endpoint,endpoint_list)
+  df1 = data[, c(2:14, pos_prs, pos_out)]
+  df2 = data[, c(2:14, pos_prs, pos_t1d)]
+  suppressWarnings({
+    res1 = pcor(df1)
+    res2 = pcor(df2)
+  })
+  pcor1 = as.numeric(res1$estimate[14,15])
+  pval1 = as.numeric(res1$p.value[14,15])
+  stat1 = as.numeric(res1$statistic[14,15])
+  pcor2 = as.numeric(res2$estimate[14,15])
+  pval2 = as.numeric(res2$p.value[14,15])
+  stat2 = as.numeric(res2$statistic[14,15])
+  RES <- rbind(RES,c(endpoint,pcor1,pval1,stat1,pcor2,pval2,stat2))
+}
+RESS <- data.frame(RES)
+colnames(RESS) <- c('endpoint','pcor1','pval1','stat1','pcor2','pval2','stat2')
+```
+
+```{r}
+write.csv(RESS,file=paste0("/home/ivm/Desktop/t1d/non_res_pcor_",date,".csv"), row.names = FALSE)
+```
+
+Full PRS
+
+```{r}
+endpoint_list = c('K11_COELIAC', 'K11_IBD',  
+                'M13_RHEUMA', 'SLE_FG', 'G6_MS', 'L12_PSORIASIS', 
+                'E4_HYTHY_AI_STRICT', 'T1D_STRICT')
+data <- read.csv(paste0("/home/ivm/Desktop/t1d/full_df_",date,".csv"))
+```
+
+```{r}
+RES = NULL
+for (endpoint in endpoint_list) {
+  pos_out = 14+match(endpoint,endpoint_list)
+  pos_t1d = 14+match('T1D_STRICT',endpoint_list)
+  # pos_t1d = 14+match('T1D_EARLY',endpoint_list)
+  pos_non = 14+length(endpoint_list)+match(endpoint,endpoint_list)
+  pos_hla = 14+length(endpoint_list)*2+match(endpoint,endpoint_list)
+  df1 = data[, c(2:14, pos_non, pos_hla, pos_out)]
+  df2 = data[, c(2:14, pos_non, pos_hla, pos_t1d)]
+  suppressWarnings({
+    res1 = pcor(df1)
+    res2 = pcor(df2)
+  })
+  pcor_non1 = as.numeric(res1$estimate[14,16])
+  pval_non1 = as.numeric(res1$p.value[14,16])
+  pcor_hla1 = as.numeric(res1$estimate[15,16])
+  pval_hla1 = as.numeric(res1$p.value[15,16])
+  
+  pcor_non2 = as.numeric(res2$estimate[14,16])
+  pval_non2 = as.numeric(res2$p.value[14,16])
+  pcor_hla2 = as.numeric(res2$estimate[15,16])
+  pval_hla2 = as.numeric(res2$p.value[15,16])
+  
+  RES <- rbind(RES,c(endpoint,pcor_non1,pval_non1,pcor_hla1,pval_hla1,
+                     pcor_non2,pval_non2,pcor_hla2,pval_hla2))
+}
+RESS <- data.frame(RES)
+colnames(RESS) <- c('endpoint','pcor_non1','pval_non1','pcor_hla1','pval_hla1',
+                    'pcor_non2','pval_non2','pcor_hla2','pval_hla2')
+```
+
+```{r}
+write.csv(RESS,file=paste0("/home/ivm/Desktop/t1d/full_res_pcor_",date,".csv"), 
+          row.names = FALSE)
+```
